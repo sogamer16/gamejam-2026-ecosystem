@@ -1,14 +1,20 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro;
+using NueGames.NueDeck.Scripts.Enums;
 
 public enum SpeciesType { Algae, Snail, Fish, Shrimp }
 
+[ExecuteAlways]
 public class EcosystemController : MonoBehaviour
 {
     private enum GameState { Menu, Playing, Result }
@@ -20,6 +26,14 @@ public class EcosystemController : MonoBehaviour
     private sealed class SpeciesDef { public string Name; public Color Color; }
     private sealed class CardDef { public string Name; public string Summary; public CardCategory Category; public Color Color; public bool Risk; public Action<TurnState> Apply; }
     private sealed class EventDef { public string Name; public string Summary; public Action<TurnState> Apply; }
+    private sealed class UiSpark
+    {
+        public Image Image;
+        public Vector2 Position;
+        public Vector2 Velocity;
+        public float Lifetime;
+        public float MaxLifetime;
+    }
     private sealed class TurnState
     {
         public int LightBonus;
@@ -46,9 +60,12 @@ public class EcosystemController : MonoBehaviour
     private readonly List<CardDef> discardPile = new List<CardDef>();
     private readonly List<CardDef> hand = new List<CardDef>();
     private readonly List<CardDef> selected = new List<CardDef>();
+    private readonly List<EcosystemCardPrefabView> cardViews = new List<EcosystemCardPrefabView>();
     private readonly List<Button> cardButtons = new List<Button>();
-    private readonly List<Text> cardTitles = new List<Text>();
-    private readonly List<Text> cardBodies = new List<Text>();
+    private readonly List<CanvasGroup> cardCanvasGroups = new List<CanvasGroup>();
+    private readonly List<RectTransform> cardRoots = new List<RectTransform>();
+    private readonly List<Image> cardShines = new List<Image>();
+    private readonly List<UiSpark> uiSparks = new List<UiSpark>();
 
     private GameState state = GameState.Menu;
     private DifficultyMode difficulty = DifficultyMode.Normal;
@@ -56,21 +73,31 @@ public class EcosystemController : MonoBehaviour
 
     private Sprite whiteSprite;
     private Canvas canvas;
+    private Camera sceneCamera;
+    private Shader foilShader;
+    private GameObject nueCardPrefab;
+    private Sprite shirtFrontSprite;
+    private Sprite shirtAccentSprite;
     private RectTransform jarArea;
+    private RectTransform rightPanelRect;
+    private RectTransform jarRect;
+    private RectTransform drawPileMarker;
+    private RectTransform discardPileMarker;
     private Image water;
     private Image lightGlow;
+    private Image playFlash;
     private GameObject menuPanel;
     private GameObject resultPanel;
-    private Text bannerText;
-    private Text statsText;
-    private Text warningText;
-    private Text eventText;
-    private Text reportText;
-    private Text selectedText;
-    private Text deckText;
-    private Text speciesText;
-    private Text resultText;
-    private Text tooltipText;
+    private TextMeshProUGUI bannerText;
+    private TextMeshProUGUI statsText;
+    private TextMeshProUGUI warningText;
+    private TextMeshProUGUI eventText;
+    private TextMeshProUGUI reportText;
+    private TextMeshProUGUI selectedText;
+    private TextMeshProUGUI deckText;
+    private TextMeshProUGUI speciesText;
+    private TextMeshProUGUI resultText;
+    private TextMeshProUGUI tooltipText;
     private GameObject tooltipPanel;
 
     private int day;
@@ -90,69 +117,143 @@ public class EcosystemController : MonoBehaviour
     private string latestMilestone;
     private string jarName;
     private EventDef currentEvent;
+    private int hoveredCardIndex = -1;
+    private bool isResolvingCard;
+    private int animatingCardIndex = -1;
+    private float playAnimTime;
+    private float playAnimDuration = 0.22f;
+    private Vector2 playAnimStart;
+    private Vector2 playAnimTarget;
+    private float playAnimStartRotation;
+    private float playAnimTargetRotation;
+    private float playAnimStartScale = 1f;
+    private float playAnimTargetScale = 1.18f;
+    private float playAnimStartAlpha = 1f;
+    private float playAnimTargetAlpha = 1f;
+    private int animatingDrawCardIndex = -1;
+    private float drawAnimTime;
+    private float drawAnimDuration = 0.26f;
+    private float screenShakeTime;
 
     private void Awake()
     {
+        if (!Application.isPlaying)
+        {
+            foilShader = Shader.Find("Custom/CardFoilUI");
+            BuildVisuals();
+            return;
+        }
+
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += OnSceneLoaded;
+        nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
+        shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
+        shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
         defs[SpeciesType.Algae] = new SpeciesDef { Name = "Algae", Color = new Color(0.43f, 0.79f, 0.36f) };
         defs[SpeciesType.Snail] = new SpeciesDef { Name = "Snail", Color = new Color(0.92f, 0.73f, 0.45f) };
         defs[SpeciesType.Fish] = new SpeciesDef { Name = "Fish", Color = new Color(0.42f, 0.72f, 0.96f) };
         defs[SpeciesType.Shrimp] = new SpeciesDef { Name = "Shrimp", Color = new Color(0.96f, 0.56f, 0.52f) };
         BuildDeckTemplate();
+        EnsurePresentationWorld();
         BuildVisuals();
         ShowMenu();
     }
 
     private void OnDestroy() { SceneManager.sceneLoaded -= OnSceneLoaded; }
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode) { if (canvas == null) BuildVisuals(); }
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode) { EnsurePresentationWorld(); if (canvas == null) BuildVisuals(); }
+
+    private void OnEnable()
+    {
+        if (!Application.isPlaying)
+        {
+            foilShader = Shader.Find("Custom/CardFoilUI");
+            nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
+            shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
+            shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
+            BuildVisuals();
+        }
+    }
 
     private void Update()
     {
-        if (state == GameState.Playing && Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) TickDay();
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        if (state == GameState.Playing && !isResolvingCard && Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) TickDay();
+        UpdateCardPresentation();
+        UpdateSparks();
+        UpdateScreenShake();
         UpdateWater();
     }
 
     private void BuildVisuals()
     {
         whiteSprite = CreateWhiteSprite();
-        if (FindFirstObjectByType<Canvas>() != null && FindFirstObjectByType<Canvas>().gameObject.name == "EcosystemCanvas") return;
+        foilShader = Shader.Find("Custom/CardFoilUI");
+        Canvas existingCanvas = FindNamedCanvas("EcosystemCanvas");
+        if (existingCanvas != null)
+        {
+            if (BindExistingVisuals(existingCanvas.gameObject))
+            {
+                return;
+            }
+
+            ClearVisualCaches();
+            if (Application.isPlaying)
+            {
+                Destroy(existingCanvas.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(existingCanvas.gameObject);
+            }
+        }
 
         GameObject c = new GameObject("EcosystemCanvas");
         canvas = c.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = sceneCamera;
+        canvas.planeDistance = 1f;
         CanvasScaler scaler = c.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920f, 1080f);
         c.AddComponent<GraphicRaycaster>();
 
-        GameObject bg = Panel("BG", canvas.transform, new Color(0.94f, 0.95f, 0.9f));
+        GameObject bg = Panel("BG", canvas.transform, new Color(0.31f, 0.25f, 0.19f));
         Stretch(bg.GetComponent<RectTransform>());
+        GameObject felt = Panel("Felt", canvas.transform, new Color(0.17f, 0.28f, 0.2f, 0.9f));
+        Place(felt.GetComponent<RectTransform>(), new Vector2(0.24f, 0.02f), new Vector2(0.99f, 0.99f), Vector2.zero, Vector2.zero);
+        GameObject vignetteTop = Panel("VignetteTop", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.16f));
+        Place(vignetteTop.GetComponent<RectTransform>(), new Vector2(0f, 0.88f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
+        GameObject vignetteBottom = Panel("VignetteBottom", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.2f));
+        Place(vignetteBottom.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0.16f), Vector2.zero, Vector2.zero);
 
         GameObject left = Panel("Left", canvas.transform, new Color(0.1f, 0.17f, 0.15f, 0.97f));
         Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.28f, 1f), Vector2.zero, Vector2.zero);
-        Text title = Label("Title", left.transform, 38, FontStyle.Bold, TextAnchor.UpperLeft);
+        TextMeshProUGUI title = Label("Title", left.transform, 38, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -24f), new Vector2(-24f, -82f));
         title.text = "Glass World";
         title.color = Color.white;
-        Text desc = Label("Desc", left.transform, 17, FontStyle.Normal, TextAnchor.UpperLeft);
+        TextMeshProUGUI desc = Label("Desc", left.transform, 17, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -84f), new Vector2(-24f, -144f));
         desc.text = "Keep 3 cards in hand. Play 1 each day, then draw 1 replacement.";
         desc.color = new Color(0.83f, 0.91f, 0.87f);
 
-        statsText = Label("Stats", left.transform, 18, FontStyle.Bold, TextAnchor.UpperLeft);
+        statsText = Label("Stats", left.transform, 18, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(statsText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -156f), new Vector2(-24f, -260f));
         statsText.color = Color.white;
-        warningText = Label("Warnings", left.transform, 15, FontStyle.Bold, TextAnchor.UpperLeft);
+        warningText = Label("Warnings", left.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -264f), new Vector2(-24f, -342f));
         warningText.color = new Color(0.98f, 0.84f, 0.4f);
-        eventText = Label("Event", left.transform, 14, FontStyle.Normal, TextAnchor.UpperLeft);
+        eventText = Label("Event", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(eventText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -346f), new Vector2(-24f, -410f));
         eventText.color = new Color(0.84f, 0.9f, 0.95f);
-        selectedText = Label("Selected", left.transform, 14, FontStyle.Normal, TextAnchor.UpperLeft);
+        selectedText = Label("Selected", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(selectedText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -414f), new Vector2(-24f, -492f));
         selectedText.color = new Color(0.88f, 0.95f, 0.9f);
-        reportText = Label("Report", left.transform, 14, FontStyle.Normal, TextAnchor.UpperLeft);
+        reportText = Label("Report", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(reportText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 180f), new Vector2(-24f, 24f));
         reportText.color = new Color(0.84f, 0.92f, 0.88f);
 
@@ -163,35 +264,44 @@ public class EcosystemController : MonoBehaviour
 
         GameObject right = Panel("Right", canvas.transform, new Color(0.2f, 0.3f, 0.24f, 0.08f));
         Place(right.GetComponent<RectTransform>(), new Vector2(0.3f, 0.04f), new Vector2(0.98f, 0.97f), Vector2.zero, Vector2.zero);
+        rightPanelRect = right.GetComponent<RectTransform>();
         Outline o = right.AddComponent<Outline>();
         o.effectColor = new Color(0.16f, 0.28f, 0.22f, 0.8f);
         o.effectDistance = new Vector2(4f, 4f);
 
-        bannerText = Label("Banner", right.transform, 28, FontStyle.Bold, TextAnchor.UpperCenter);
+        bannerText = Label("Banner", right.transform, 28, FontStyles.Bold, TextAlignmentOptions.Top);
         Place(bannerText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -18f), new Vector2(-24f, -70f));
         bannerText.color = new Color(0.13f, 0.2f, 0.16f);
-        deckText = Label("Deck", right.transform, 17, FontStyle.Bold, TextAnchor.UpperLeft);
+        deckText = Label("Deck", right.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(deckText.rectTransform, new Vector2(0f, 1f), new Vector2(0.35f, 1f), new Vector2(24f, -76f), new Vector2(-6f, -128f));
         deckText.color = new Color(0.14f, 0.2f, 0.17f);
-        speciesText = Label("Species", right.transform, 17, FontStyle.Bold, TextAnchor.UpperRight);
+        drawPileMarker = CreatePileMarker("DrawPileMarker", right.transform, new Vector2(122f, -152f), "Draw");
+        discardPileMarker = CreatePileMarker("DiscardPileMarker", right.transform, new Vector2(248f, -152f), "Discard");
+        speciesText = Label("Species", right.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopRight);
         Place(speciesText.rectTransform, new Vector2(0.45f, 1f), new Vector2(1f, 1f), new Vector2(6f, -76f), new Vector2(-24f, -154f));
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
 
         GameObject jar = Panel("Jar", right.transform, new Color(0.81f, 0.92f, 0.95f, 0.18f));
         Place(jar.GetComponent<RectTransform>(), new Vector2(0.08f, 0.22f), new Vector2(0.92f, 0.78f), Vector2.zero, Vector2.zero);
+        jarRect = jar.GetComponent<RectTransform>();
         Outline jarOutline = jar.AddComponent<Outline>();
         jarOutline.effectColor = new Color(0.18f, 0.32f, 0.27f, 0.8f);
         jarOutline.effectDistance = new Vector2(4f, 4f);
+        Shadow jarShadow = jar.AddComponent<Shadow>();
+        jarShadow.effectColor = new Color(0f, 0f, 0f, 0.22f);
+        jarShadow.effectDistance = new Vector2(0f, -12f);
         water = Panel("Water", jar.transform, new Color(0.62f, 0.86f, 0.96f, 0.5f)).GetComponent<Image>();
         Place(water.rectTransform, new Vector2(0.05f, 0.12f), new Vector2(0.95f, 0.9f), Vector2.zero, Vector2.zero);
         lightGlow = Panel("LightGlow", jar.transform, new Color(1f, 0.97f, 0.74f, 0.16f)).GetComponent<Image>();
         Place(lightGlow.rectTransform, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.95f), Vector2.zero, Vector2.zero);
+        playFlash = Panel("PlayFlash", jar.transform, new Color(1f, 1f, 1f, 0f)).GetComponent<Image>();
+        Stretch(playFlash.rectTransform);
         GameObject layer = new GameObject("Organisms");
         jarArea = layer.AddComponent<RectTransform>();
         jarArea.SetParent(jar.transform, false);
         Place(jarArea, new Vector2(0.08f, 0.14f), new Vector2(0.92f, 0.88f), Vector2.zero, Vector2.zero);
 
-        Text handLabel = Label("HandLabel", right.transform, 24, FontStyle.Bold, TextAnchor.UpperLeft);
+        TextMeshProUGUI handLabel = Label("HandLabel", right.transform, 24, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(handLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 210f), new Vector2(-24f, 248f));
         handLabel.text = "Today's Hand";
         handLabel.color = new Color(0.13f, 0.2f, 0.16f);
@@ -199,18 +309,18 @@ public class EcosystemController : MonoBehaviour
 
         tooltipPanel = Panel("Tooltip", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.92f));
         Place(tooltipPanel.GetComponent<RectTransform>(), new Vector2(0.68f, 0.02f), new Vector2(0.96f, 0.12f), Vector2.zero, Vector2.zero);
-        tooltipText = Label("TooltipText", tooltipPanel.transform, 15, FontStyle.Normal, TextAnchor.MiddleCenter);
+        tooltipText = Label("TooltipText", tooltipPanel.transform, 15, FontStyles.Normal, TextAlignmentOptions.Center);
         Stretch(tooltipText.rectTransform);
         tooltipText.color = Color.white;
         tooltipPanel.SetActive(false);
 
         menuPanel = Panel("Menu", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.85f));
         Stretch(menuPanel.GetComponent<RectTransform>());
-        Text mt = Label("MenuTitle", menuPanel.transform, 56, FontStyle.Bold, TextAnchor.MiddleCenter);
+        TextMeshProUGUI mt = Label("MenuTitle", menuPanel.transform, 56, FontStyles.Bold, TextAlignmentOptions.Center);
         Place(mt.rectTransform, new Vector2(0.18f, 0.56f), new Vector2(0.82f, 0.8f), Vector2.zero, Vector2.zero);
         mt.text = "Glass World";
         mt.color = Color.white;
-        Text mb = Label("MenuBody", menuPanel.transform, 24, FontStyle.Normal, TextAnchor.MiddleCenter);
+        TextMeshProUGUI mb = Label("MenuBody", menuPanel.transform, 24, FontStyles.Normal, TextAlignmentOptions.Center);
         Place(mb.rectTransform, new Vector2(0.16f, 0.36f), new Vector2(0.84f, 0.56f), Vector2.zero, Vector2.zero);
         mb.text = "Keep a hand of 3 cards. Play 1 each day, draw 1 replacement, and adapt to the jar.";
         mb.color = new Color(0.87f, 0.93f, 0.9f);
@@ -219,7 +329,7 @@ public class EcosystemController : MonoBehaviour
 
         resultPanel = Panel("Result", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.85f));
         Stretch(resultPanel.GetComponent<RectTransform>());
-        resultText = Label("ResultText", resultPanel.transform, 44, FontStyle.Bold, TextAnchor.MiddleCenter);
+        resultText = Label("ResultText", resultPanel.transform, 44, FontStyles.Bold, TextAlignmentOptions.Center);
         Place(resultText.rectTransform, new Vector2(0.14f, 0.38f), new Vector2(0.86f, 0.7f), Vector2.zero, Vector2.zero);
         resultText.color = Color.white;
         Button again = CreateUiButton("Play Again", resultPanel.transform, new Color(0.42f, 0.75f, 0.94f), StartGame);
@@ -227,38 +337,256 @@ public class EcosystemController : MonoBehaviour
         resultPanel.SetActive(false);
     }
 
+    private bool BindExistingVisuals(GameObject canvasObject)
+    {
+        ClearVisualCaches();
+        canvas = canvasObject.GetComponent<Canvas>();
+        rightPanelRect = FindRect(canvasObject.transform, "Right");
+        jarRect = FindRect(canvasObject.transform, "Jar");
+        jarArea = FindRect(canvasObject.transform, "Organisms");
+        drawPileMarker = FindRect(canvasObject.transform, "DrawPileMarker");
+        discardPileMarker = FindRect(canvasObject.transform, "DiscardPileMarker");
+        water = FindImage(canvasObject.transform, "Water");
+        lightGlow = FindImage(canvasObject.transform, "LightGlow");
+        playFlash = FindImage(canvasObject.transform, "PlayFlash");
+        menuPanel = FindObject(canvasObject.transform, "Menu");
+        resultPanel = FindObject(canvasObject.transform, "Result");
+        tooltipPanel = FindObject(canvasObject.transform, "Tooltip");
+        bannerText = FindText(canvasObject.transform, "Banner");
+        statsText = FindText(canvasObject.transform, "Stats");
+        warningText = FindText(canvasObject.transform, "Warnings");
+        eventText = FindText(canvasObject.transform, "Event");
+        reportText = FindText(canvasObject.transform, "Report");
+        selectedText = FindText(canvasObject.transform, "Selected");
+        deckText = FindText(canvasObject.transform, "Deck");
+        speciesText = FindText(canvasObject.transform, "Species");
+        resultText = FindText(canvasObject.transform, "ResultText");
+        tooltipText = FindText(canvasObject.transform, "TooltipText");
+
+        if (canvas == null || rightPanelRect == null || jarRect == null || jarArea == null || bannerText == null || menuPanel == null || resultPanel == null)
+        {
+            return false;
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            RectTransform slotRect = FindRect(canvasObject.transform, "Card" + i);
+            if (slotRect == null)
+            {
+                continue;
+            }
+
+            cardRoots.Add(slotRect);
+            EcosystemCardPrefabView view = slotRect.GetComponent<EcosystemCardPrefabView>();
+            if (view == null)
+            {
+                view = slotRect.gameObject.AddComponent<EcosystemCardPrefabView>();
+            }
+
+            view.Initialize();
+            if (!view.HasTemplateCard)
+            {
+                return false;
+            }
+            cardViews.Add(view);
+            Button cardButton = view.SelectButton;
+            int index = cardButtons.Count;
+            cardButton.onClick.RemoveAllListeners();
+            cardButton.onClick.AddListener(delegate { ToggleCard(index); });
+            cardButtons.Add(cardButton);
+            cardShines.Add(view.ShineImage);
+            CanvasGroup canvasGroup = slotRect.GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = slotRect.gameObject.AddComponent<CanvasGroup>();
+            }
+            cardCanvasGroups.Add(canvasGroup);
+        }
+
+        if (cardRoots.Count < 3 || cardButtons.Count < 3)
+        {
+            return false;
+        }
+
+        RebindNamedButton(canvasObject.transform, "Play Selected CardButton", TickDay);
+        RebindNamedButton(canvasObject.transform, "Restart RunButton", StartGame);
+        RebindNamedButton(canvasObject.transform, "Start PrototypeButton", StartGame);
+        RebindNamedButton(canvasObject.transform, "Play AgainButton", StartGame);
+        return true;
+    }
+
+    private void EnsurePresentationWorld()
+    {
+        if (sceneCamera == null)
+        {
+            Camera existing = Camera.main;
+            if (existing != null)
+            {
+                sceneCamera = existing;
+            }
+            else
+            {
+                GameObject cameraObject = new GameObject("CardTableCamera");
+                sceneCamera = cameraObject.AddComponent<Camera>();
+            }
+        }
+
+        sceneCamera.orthographic = false;
+        sceneCamera.fieldOfView = 34f;
+        sceneCamera.nearClipPlane = 0.1f;
+        sceneCamera.farClipPlane = 200f;
+        sceneCamera.clearFlags = CameraClearFlags.SolidColor;
+        sceneCamera.backgroundColor = new Color(0.08f, 0.11f, 0.1f);
+        sceneCamera.transform.position = new Vector3(0f, 2.7f, -9.4f);
+        sceneCamera.transform.rotation = Quaternion.Euler(14f, 0f, 0f);
+        if (sceneCamera.GetComponent<UniversalAdditionalCameraData>() == null)
+        {
+            sceneCamera.gameObject.AddComponent<UniversalAdditionalCameraData>();
+        }
+
+        if (GameObject.Find("CardTableLight") == null)
+        {
+            GameObject lightObject = new GameObject("CardTableLight");
+            Light light = lightObject.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.2f;
+            light.color = new Color(1f, 0.96f, 0.9f);
+            light.shadows = LightShadows.Soft;
+            lightObject.transform.rotation = Quaternion.Euler(44f, -26f, 0f);
+        }
+
+        if (GameObject.Find("CardTableSurface") == null)
+        {
+            GameObject table = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            table.name = "CardTableSurface";
+            table.transform.position = new Vector3(0f, -1.75f, 5.5f);
+            table.transform.localScale = new Vector3(2f, 1f, 2f);
+            Renderer renderer = table.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader != null)
+                {
+                    Material material = new Material(shader);
+                    material.color = new Color(0.19f, 0.31f, 0.24f);
+                    renderer.sharedMaterial = material;
+                }
+            }
+        }
+
+        if (GameObject.Find("BackdropWall") == null)
+        {
+            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            wall.name = "BackdropWall";
+            wall.transform.position = new Vector3(0f, 1.2f, 16f);
+            wall.transform.localScale = new Vector3(18f, 10f, 1f);
+            Renderer renderer = wall.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (shader != null)
+                {
+                    Material material = new Material(shader);
+                    material.color = new Color(0.11f, 0.14f, 0.14f);
+                    renderer.sharedMaterial = material;
+                }
+            }
+        }
+
+        if (GameObject.Find("RuntimePostVolume") == null)
+        {
+            GameObject volumeObject = new GameObject("RuntimePostVolume");
+            Volume volume = volumeObject.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 100f;
+            VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            volume.sharedProfile = profile;
+
+            Bloom bloom = profile.Add<Bloom>(true);
+            bloom.active = true;
+            bloom.intensity.Override(0.15f);
+            bloom.threshold.Override(0.9f);
+            bloom.scatter.Override(0.8f);
+
+            Vignette vignette = profile.Add<Vignette>(true);
+            vignette.active = true;
+            vignette.intensity.Override(0.22f);
+            vignette.smoothness.Override(0.65f);
+
+            ColorAdjustments colorAdjustments = profile.Add<ColorAdjustments>(true);
+            colorAdjustments.active = true;
+            colorAdjustments.postExposure.Override(0.05f);
+            colorAdjustments.contrast.Override(10f);
+            colorAdjustments.saturation.Override(8f);
+        }
+    }
+
     private void CreateCardSlots(Transform parent)
     {
         for (int i = 0; i < 3; i++)
         {
-            float start = 0.04f + (i * 0.31f);
-            GameObject slot = Panel("Card" + i, parent, new Color(0.97f, 0.95f, 0.9f, 0.98f));
-            Place(slot.GetComponent<RectTransform>(), new Vector2(start, 0f), new Vector2(start + 0.28f, 0f), new Vector2(0f, 26f), new Vector2(0f, 194f));
-            Outline outline = slot.AddComponent<Outline>();
-            outline.effectColor = new Color(0.13f, 0.22f, 0.18f, 0.8f);
-            outline.effectDistance = new Vector2(2f, 2f);
+            GameObject slot = nueCardPrefab != null ? Instantiate(nueCardPrefab, parent) : Panel("Card" + i, parent, new Color(0.97f, 0.95f, 0.9f, 0.98f));
+            slot.name = "Card" + i;
+            RectTransform slotRect = slot.GetComponent<RectTransform>();
+            if (slotRect == null)
+            {
+                slotRect = slot.AddComponent<RectTransform>();
+            }
 
-            Text t = Label("Title", slot.transform, 21, FontStyle.Bold, TextAnchor.UpperLeft);
-            Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -14f), new Vector2(-16f, -44f));
-            t.color = new Color(0.12f, 0.18f, 0.15f);
-            cardTitles.Add(t);
+            slotRect.SetParent(parent, false);
+            slotRect.anchorMin = new Vector2(0.5f, 0f);
+            slotRect.anchorMax = new Vector2(0.5f, 0f);
+            slotRect.pivot = new Vector2(0.5f, 0f);
+            slotRect.sizeDelta = new Vector2(270f, 370f);
+            slotRect.anchoredPosition = new Vector2((i - 1) * 250f, 18f);
+            cardRoots.Add(slotRect);
+            CanvasGroup canvasGroup = slot.GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = slot.AddComponent<CanvasGroup>();
+            }
+            canvasGroup.alpha = 1f;
+            cardCanvasGroups.Add(canvasGroup);
 
-            Text body = Label("Body", slot.transform, 14, FontStyle.Normal, TextAnchor.UpperLeft);
-            Place(body.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -50f), new Vector2(-16f, -156f));
-            body.color = new Color(0.2f, 0.28f, 0.24f);
-            cardBodies.Add(body);
+            EcosystemCardPrefabView view = slot.GetComponent<EcosystemCardPrefabView>();
+            if (view == null)
+            {
+                view = slot.AddComponent<EcosystemCardPrefabView>();
+            }
 
-            Button b = CreateUiButton("Select", slot.transform, new Color(0.38f, 0.74f, 0.51f), delegate { });
-            Place(b.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 14f), new Vector2(-16f, 56f));
+            view.Initialize();
+            if (foilShader != null && view.ShineImage != null)
+            {
+                view.ShineImage.material = new Material(foilShader);
+            }
+
+            cardViews.Add(view);
+            cardShines.Add(view.ShineImage);
+
+            Button b = view.SelectButton;
             int index = i;
             b.onClick.RemoveAllListeners();
             b.onClick.AddListener(delegate { ToggleCard(index); });
             cardButtons.Add(b);
+
+            EventTrigger trigger = slot.GetComponent<EventTrigger>() ?? slot.AddComponent<EventTrigger>();
+            trigger.triggers.Clear();
+            EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            enter.callback.AddListener(delegate { hoveredCardIndex = index; ShowCardTooltip(index); });
+            trigger.triggers.Add(enter);
+            EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+            exit.callback.AddListener(delegate { if (hoveredCardIndex == index) hoveredCardIndex = -1; if (tooltipPanel != null) tooltipPanel.SetActive(false); });
+            trigger.triggers.Add(exit);
         }
     }
 
     private void ShowMenu()
     {
+        if (Application.isPlaying && SceneManager.GetActiveScene().path == "Assets/Scenes/SampleScene.unity")
+        {
+            StartGame();
+            return;
+        }
+
         state = GameState.Menu;
         menuPanel.SetActive(true);
         resultPanel.SetActive(false);
@@ -344,9 +672,14 @@ public class EcosystemController : MonoBehaviour
         selected.Clear();
         DrawToFullHand();
         currentEvent = RollEvent();
+        SetupDayPresentation();
+    }
+
+    private void SetupDayPresentation()
+    {
         latestWarnings = "Choose 1 card to shape the jar.";
         dayReport = jarName + "\nDay " + day + "\nPlan carefully before resolving the ecosystem.";
-        bannerText.text = jarName + "  Day " + day + " - Play 1 card, then draw 1.";
+        if (bannerText != null) bannerText.text = jarName + "  Day " + day + " - Play 1 card, then draw 1.";
         RefreshHud();
     }
 
@@ -389,12 +722,37 @@ public class EcosystemController : MonoBehaviour
 
     private void TickDay()
     {
-        if (state != GameState.Playing) return;
+        if (state != GameState.Playing || isResolvingCard) return;
         if (selected.Count == 0) { latestWarnings = "Play 1 card before ending the day."; RefreshHud(); return; }
+        StartCoroutine(ResolveSelectedCardRoutine(selected[0]));
+    }
+
+    private IEnumerator ResolveSelectedCardRoutine(CardDef playedCard)
+    {
+        isResolvingCard = true;
+        int playedIndex = hand.IndexOf(playedCard);
+        if (playedIndex >= 0 && playedIndex < cardRoots.Count && jarRect != null)
+        {
+            Vector3 worldTarget = jarRect.TransformPoint(jarRect.rect.center);
+            Vector2 jarTarget = (Vector2)rightPanelRect.InverseTransformPoint(worldTarget);
+            StartCardAnimation(playedIndex, jarTarget, 0f, 1.08f, 1.18f, 1f, 1f, 0.22f);
+            if (playFlash != null) playFlash.color = new Color(1f, 1f, 1f, 0.22f);
+            yield return WaitForCardAnimation();
+            CreateSparkBurst(playAnimTarget, playedCard.Color, 12);
+            screenShakeTime = 0.15f;
+            bloomFlash = Mathf.Max(bloomFlash, 0.55f);
+            if (discardPileMarker != null)
+            {
+                Vector3 discardWorld = discardPileMarker.TransformPoint(discardPileMarker.rect.center);
+                Vector2 discardTarget = (Vector2)rightPanelRect.InverseTransformPoint(discardWorld);
+                StartCardAnimation(playedIndex, discardTarget, -14f, 1.18f, 0.38f, 1f, 0.18f, 0.24f);
+                yield return WaitForCardAnimation();
+            }
+        }
 
         TurnState turn = new TurnState();
         currentEvent.Apply(turn);
-        foreach (CardDef card in selected) card.Apply(turn);
+        playedCard.Apply(turn);
 
         RemoveSpecies(SpeciesType.Fish, turn.RemoveFish);
         RemoveSpecies(SpeciesType.Snail, turn.RemoveSnail);
@@ -405,15 +763,29 @@ public class EcosystemController : MonoBehaviour
         if (turn.WasteDays > 0) wasteDaysRemaining = Mathf.Max(wasteDaysRemaining, turn.WasteDays);
 
         ResolveSimulation(turn);
-        foreach (CardDef playedCard in selected)
-        {
-            hand.Remove(playedCard);
-            discardPile.Add(playedCard);
-        }
+        hand.Remove(playedCard);
+        discardPile.Add(playedCard);
         selected.Clear();
-        if (state != GameState.Playing) return;
+        hoveredCardIndex = -1;
+        RefreshHud();
+        if (state != GameState.Playing)
+        {
+            isResolvingCard = false;
+            yield break;
+        }
+        yield return new WaitForSecondsRealtime(0.14f);
         day++;
-        PrepareDay();
+        int handCountBeforeDraw = hand.Count;
+        DrawToFullHand();
+        currentEvent = RollEvent();
+        SetupDayPresentation();
+        if (hand.Count > handCountBeforeDraw)
+        {
+            int drawnIndex = hand.Count - 1;
+            StartDrawAnimation(drawnIndex);
+            yield return WaitForDrawAnimation();
+        }
+        isResolvingCard = false;
     }
 
     private void ResolveSimulation(TurnState turn)
@@ -543,17 +915,442 @@ public class EcosystemController : MonoBehaviour
         for (int i = 0; i < cardButtons.Count; i++)
         {
             bool visible = i < hand.Count;
-            cardButtons[i].transform.parent.gameObject.SetActive(visible);
+            cardRoots[i].gameObject.SetActive(visible);
+            if (i < cardCanvasGroups.Count && cardCanvasGroups[i] != null && visible && animatingCardIndex != i && animatingDrawCardIndex != i)
+            {
+                cardCanvasGroups[i].alpha = 1f;
+            }
+            if (!visible)
+            {
+                if (i < cardCanvasGroups.Count && cardCanvasGroups[i] != null)
+                {
+                    cardCanvasGroups[i].alpha = 0f;
+                }
+                cardRoots[i].localScale = Vector3.one;
+                cardRoots[i].localRotation = Quaternion.identity;
+            }
             if (!visible) continue;
             CardDef card = hand[i];
-            cardTitles[i].text = card.Name + "\n" + card.Category + (card.Risk ? " Risk" : string.Empty);
-            cardBodies[i].text = card.Summary;
-            cardButtons[i].GetComponent<Image>().color = selected.Contains(card) ? Color.Lerp(card.Color, Color.white, 0.2f) : card.Color;
-            Text label = cardButtons[i].GetComponentInChildren<Text>();
-            if (label != null) label.text = selected.Contains(card) ? "Selected" : (selected.Count >= 1 ? "Pick 1 Only" : "Select");
-            cardButtons[i].interactable = selected.Contains(card) || selected.Count < 1;
-            Tooltip(cardButtons[i].transform.parent.gameObject, card.Name + "\n" + card.Summary);
+            bool isSelected = selected.Contains(card);
+            bool canInteract = isSelected || selected.Count < 1;
+            if (i < cardViews.Count && cardViews[i] != null)
+            {
+                cardViews[i].SetCard(card.Name, card.Summary, card.Category.ToString(), card.Risk, card.Color, GetCardArtSprite(card), GetCardFrameSprite(card), GetCardRarity(card), isSelected, canInteract);
+            }
+            else
+            {
+                TMP_Text label = cardButtons[i].GetComponentInChildren<TMP_Text>();
+                if (label != null) label.text = isSelected ? "Selected" : (selected.Count >= 1 ? "Pick 1 Only" : "Select");
+                cardButtons[i].interactable = canInteract;
+            }
         }
+    }
+
+    private void UpdateCardPresentation()
+    {
+        for (int i = 0; i < cardRoots.Count; i++)
+        {
+            if (cardRoots[i] == null)
+            {
+                continue;
+            }
+
+            if (i >= hand.Count)
+            {
+                cardRoots[i].localScale = Vector3.Lerp(cardRoots[i].localScale, Vector3.one * 0.96f, Time.unscaledDeltaTime * 10f);
+                continue;
+            }
+
+            RectTransform rect = cardRoots[i];
+            if (i == animatingCardIndex)
+            {
+                float eased = EaseOutCubic(Mathf.Clamp01(playAnimTime));
+                rect.anchoredPosition = Vector2.Lerp(playAnimStart, playAnimTarget, eased);
+                rect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(playAnimStartRotation, playAnimTargetRotation, eased));
+                rect.localScale = Vector3.Lerp(Vector3.one * playAnimStartScale, Vector3.one * playAnimTargetScale, eased);
+                if (i < cardCanvasGroups.Count && cardCanvasGroups[i] != null)
+                {
+                    cardCanvasGroups[i].alpha = Mathf.Lerp(playAnimStartAlpha, playAnimTargetAlpha, eased);
+                }
+                if (playFlash != null)
+                {
+                    Color flash = playFlash.color;
+                    flash.a = Mathf.Lerp(0.22f, 0f, eased);
+                    playFlash.color = flash;
+                }
+                continue;
+            }
+            if (i == animatingDrawCardIndex)
+            {
+                float eased = EaseOutCubic(Mathf.Clamp01(drawAnimTime));
+                Vector2 drawTargetPos = GetHandCardTargetPosition(i);
+                float drawTargetRot = GetHandCardTargetRotation(i);
+                Vector2 startPos = GetPilePosition(drawPileMarker);
+                rect.anchoredPosition = Vector2.Lerp(startPos, drawTargetPos, eased);
+                rect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(10f, drawTargetRot, eased));
+                rect.localScale = Vector3.Lerp(Vector3.one * 0.72f, Vector3.one, eased);
+                if (i < cardCanvasGroups.Count && cardCanvasGroups[i] != null)
+                {
+                    cardCanvasGroups[i].alpha = Mathf.Lerp(0.15f, 1f, eased);
+                }
+                continue;
+            }
+
+            Vector2 targetPos = GetHandCardTargetPosition(i);
+            float targetRot = GetHandCardTargetRotation(i);
+            bool hovered = hoveredCardIndex == i;
+            bool picked = i < hand.Count && selected.Contains(hand[i]);
+            if (hovered || picked)
+            {
+                targetPos += new Vector2(0f, picked ? 42f : 28f);
+            }
+
+            float targetScale = hovered ? 1.06f : picked ? 1.08f : 1f;
+            rect.anchoredPosition = Vector2.Lerp(rect.anchoredPosition, targetPos, Time.unscaledDeltaTime * 10f);
+            rect.localRotation = Quaternion.Lerp(rect.localRotation, Quaternion.Euler(0f, 0f, targetRot), Time.unscaledDeltaTime * 10f);
+            rect.localScale = Vector3.Lerp(rect.localScale, Vector3.one * targetScale, Time.unscaledDeltaTime * 10f);
+
+            if (i < cardShines.Count)
+            {
+                Image shine = cardShines[i];
+                if (shine != null)
+                {
+                    RectTransform shineRect = shine.rectTransform;
+                    float shineX = Mathf.PingPong((Time.unscaledTime * 80f) + (i * 70f), rect.rect.width + 120f) - 60f;
+                    shineRect.anchoredPosition = Vector2.Lerp(shineRect.anchoredPosition, new Vector2(shineX, 0f), Time.unscaledDeltaTime * 5f);
+                    Color shineColor = shine.color;
+                    shineColor.a = hovered ? 0.18f : 0.08f;
+                    shine.color = shineColor;
+                }
+            }
+        }
+    }
+
+    private void ShowCardTooltip(int index)
+    {
+        if (tooltipPanel == null || index < 0 || index >= hand.Count)
+        {
+            return;
+        }
+
+        tooltipText.text = hand[index].Name + "\n" + hand[index].Summary;
+        tooltipPanel.SetActive(true);
+    }
+
+    private void CreateSparkBurst(Vector2 center, Color color, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            GameObject dot = Panel("Spark", rightPanelRect, color);
+            RectTransform rect = dot.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(UnityEngine.Random.Range(6f, 12f), UnityEngine.Random.Range(6f, 12f));
+            UiSpark spark = new UiSpark
+            {
+                Image = dot.GetComponent<Image>(),
+                Position = center,
+                Velocity = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(180f, 320f),
+                Lifetime = UnityEngine.Random.Range(0.32f, 0.55f),
+                MaxLifetime = 0.55f
+            };
+            uiSparks.Add(spark);
+        }
+    }
+
+    private void UpdateSparks()
+    {
+        for (int i = uiSparks.Count - 1; i >= 0; i--)
+        {
+            UiSpark spark = uiSparks[i];
+            spark.Lifetime -= Time.unscaledDeltaTime;
+            spark.Position += spark.Velocity * Time.unscaledDeltaTime;
+            spark.Velocity *= 0.95f;
+            if (spark.Image != null)
+            {
+                spark.Image.rectTransform.anchoredPosition = spark.Position;
+                Color color = spark.Image.color;
+                color.a = Mathf.Clamp01(spark.Lifetime / spark.MaxLifetime);
+                spark.Image.color = color;
+            }
+
+            if (spark.Lifetime <= 0f)
+            {
+                if (spark.Image != null) Destroy(spark.Image.gameObject);
+                uiSparks.RemoveAt(i);
+            }
+        }
+    }
+
+    private void UpdateScreenShake()
+    {
+        if (rightPanelRect == null)
+        {
+            return;
+        }
+
+        if (screenShakeTime > 0f)
+        {
+            screenShakeTime -= Time.unscaledDeltaTime;
+            rightPanelRect.anchoredPosition = UnityEngine.Random.insideUnitCircle * 6f;
+        }
+        else
+        {
+            rightPanelRect.anchoredPosition = Vector2.Lerp(rightPanelRect.anchoredPosition, Vector2.zero, Time.unscaledDeltaTime * 12f);
+        }
+    }
+
+    private static float EaseOutCubic(float t)
+    {
+        float inv = 1f - t;
+        return 1f - (inv * inv * inv);
+    }
+
+    private void StartCardAnimation(int index, Vector2 target, float targetRotation, float startScale, float endScale, float startAlpha, float endAlpha, float duration)
+    {
+        if (index < 0 || index >= cardRoots.Count)
+        {
+            return;
+        }
+
+        animatingCardIndex = index;
+        playAnimTime = 0f;
+        playAnimDuration = Mathf.Max(0.01f, duration);
+        playAnimStart = cardRoots[index].anchoredPosition;
+        playAnimTarget = target;
+        playAnimStartRotation = cardRoots[index].localEulerAngles.z;
+        playAnimTargetRotation = targetRotation;
+        playAnimStartScale = startScale;
+        playAnimTargetScale = endScale;
+        playAnimStartAlpha = startAlpha;
+        playAnimTargetAlpha = endAlpha;
+    }
+
+    private IEnumerator WaitForCardAnimation()
+    {
+        while (animatingCardIndex >= 0)
+        {
+            playAnimTime += Time.unscaledDeltaTime / playAnimDuration;
+            if (playAnimTime >= 1f)
+            {
+                int index = animatingCardIndex;
+                if (index >= 0 && index < cardCanvasGroups.Count && cardCanvasGroups[index] != null)
+                {
+                    cardCanvasGroups[index].alpha = playAnimTargetAlpha;
+                }
+                animatingCardIndex = -1;
+            }
+            yield return null;
+        }
+    }
+
+    private void StartDrawAnimation(int index)
+    {
+        if (index < 0 || index >= cardRoots.Count)
+        {
+            return;
+        }
+
+        animatingDrawCardIndex = index;
+        drawAnimTime = 0f;
+        drawAnimDuration = 0.26f;
+        cardRoots[index].anchoredPosition = GetPilePosition(drawPileMarker);
+        cardRoots[index].localRotation = Quaternion.Euler(0f, 0f, 10f);
+        cardRoots[index].localScale = Vector3.one * 0.72f;
+        if (index < cardCanvasGroups.Count && cardCanvasGroups[index] != null)
+        {
+            cardCanvasGroups[index].alpha = 0.15f;
+        }
+    }
+
+    private IEnumerator WaitForDrawAnimation()
+    {
+        while (animatingDrawCardIndex >= 0)
+        {
+            drawAnimTime += Time.unscaledDeltaTime / drawAnimDuration;
+            if (drawAnimTime >= 1f)
+            {
+                int index = animatingDrawCardIndex;
+                if (index >= 0 && index < cardCanvasGroups.Count && cardCanvasGroups[index] != null)
+                {
+                    cardCanvasGroups[index].alpha = 1f;
+                }
+                animatingDrawCardIndex = -1;
+            }
+            yield return null;
+        }
+    }
+
+    private Vector2 GetHandCardTargetPosition(int index)
+    {
+        float spread = hand.Count == 1 ? 0f : (index - ((hand.Count - 1) * 0.5f));
+        return new Vector2(spread * 250f, 18f + (-Mathf.Abs(spread) * 14f));
+    }
+
+    private float GetHandCardTargetRotation(int index)
+    {
+        float spread = hand.Count == 1 ? 0f : (index - ((hand.Count - 1) * 0.5f));
+        return -spread * 7f;
+    }
+
+    private Vector2 GetPilePosition(RectTransform pileMarker)
+    {
+        if (pileMarker == null || rightPanelRect == null)
+        {
+            return new Vector2(0f, 24f);
+        }
+
+        Vector3 world = pileMarker.TransformPoint(pileMarker.rect.center);
+        return (Vector2)rightPanelRect.InverseTransformPoint(world);
+    }
+
+    private RectTransform CreatePileMarker(string name, Transform parent, Vector2 anchoredPosition, string label)
+    {
+        GameObject pile = Panel(name, parent, new Color(0.96f, 0.92f, 0.84f, 0.9f));
+        RectTransform rect = pile.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.sizeDelta = new Vector2(92f, 126f);
+        rect.anchoredPosition = anchoredPosition;
+        Shadow shadow = pile.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.18f);
+        shadow.effectDistance = new Vector2(0f, -6f);
+        if (shirtFrontSprite != null)
+        {
+            pile.GetComponent<Image>().sprite = shirtFrontSprite;
+            pile.GetComponent<Image>().type = Image.Type.Sliced;
+            pile.GetComponent<Image>().preserveAspect = false;
+        }
+
+        TextMeshProUGUI text = Label(name + "Label", pile.transform, 14, FontStyles.Bold, TextAlignmentOptions.Bottom);
+        Stretch(text.rectTransform);
+        text.margin = new Vector4(8f, 8f, 8f, 10f);
+        text.text = label;
+        text.color = new Color(0.18f, 0.14f, 0.1f);
+        return rect;
+    }
+
+    private void ClearVisualCaches()
+    {
+        cardButtons.Clear();
+        cardViews.Clear();
+        cardCanvasGroups.Clear();
+        cardRoots.Clear();
+        cardShines.Clear();
+        hoveredCardIndex = -1;
+        animatingCardIndex = -1;
+        animatingDrawCardIndex = -1;
+    }
+
+    private static Transform FindChildRecursive(Transform parent, string name)
+    {
+        if (parent == null)
+        {
+            return null;
+        }
+
+        if (parent.name == name)
+        {
+            return parent;
+        }
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform match = FindChildRecursive(parent.GetChild(i), name);
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static RectTransform FindRect(Transform parent, string name)
+    {
+        Transform match = FindChildRecursive(parent, name);
+        return match != null ? match.GetComponent<RectTransform>() : null;
+    }
+
+    private static TextMeshProUGUI FindText(Transform parent, string name)
+    {
+        Transform match = FindChildRecursive(parent, name);
+        return match != null ? match.GetComponent<TextMeshProUGUI>() : null;
+    }
+
+    private static Image FindImage(Transform parent, string name)
+    {
+        Transform match = FindChildRecursive(parent, name);
+        return match != null ? match.GetComponent<Image>() : null;
+    }
+
+    private static GameObject FindObject(Transform parent, string name)
+    {
+        Transform match = FindChildRecursive(parent, name);
+        return match != null ? match.gameObject : null;
+    }
+
+    private static Canvas FindNamedCanvas(string targetName)
+    {
+        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            if (canvases[i] != null && canvases[i].gameObject.name == targetName)
+            {
+                return canvases[i];
+            }
+        }
+
+        return null;
+    }
+
+    private void RebindNamedButton(Transform root, string name, UnityEngine.Events.UnityAction action)
+    {
+        Transform match = FindChildRecursive(root, name);
+        if (match == null)
+        {
+            return;
+        }
+
+        Button button = match.GetComponent<Button>();
+        if (button == null)
+        {
+            return;
+        }
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(action);
+    }
+
+    private Sprite GetCardArtSprite(CardDef card)
+    {
+        if (card.Risk)
+        {
+            return shirtAccentSprite != null ? shirtAccentSprite : shirtFrontSprite;
+        }
+
+        return card.Category == CardCategory.Snail || card.Category == CardCategory.Water ? shirtAccentSprite : shirtFrontSprite;
+    }
+
+    private Sprite GetCardFrameSprite(CardDef card)
+    {
+        if (card.Category == CardCategory.Algae || card.Category == CardCategory.Light)
+        {
+            return shirtAccentSprite != null ? shirtAccentSprite : shirtFrontSprite;
+        }
+
+        return shirtFrontSprite != null ? shirtFrontSprite : shirtAccentSprite;
+    }
+
+    private static RarityType GetCardRarity(CardDef card)
+    {
+        if (card.Risk)
+        {
+            return RarityType.Legendary;
+        }
+
+        return card.Category == CardCategory.Water || card.Category == CardCategory.Light ? RarityType.Rare : RarityType.Common;
     }
 
     private void ApplyStartingJar()
@@ -730,8 +1527,8 @@ public class EcosystemController : MonoBehaviour
     }
 
     private static GameObject Panel(string name, Transform parent, Color color) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); Image img = go.AddComponent<Image>(); img.color = color; return go; }
-    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = Panel(text + "Button", parent, color); Button b = go.AddComponent<Button>(); ColorBlock cb = b.colors; cb.highlightedColor = Color.Lerp(color, Color.white, 0.18f); cb.pressedColor = Color.Lerp(color, Color.black, 0.12f); b.colors = cb; b.onClick.AddListener(onClick); Text t = Label(text + "Text", go.transform, 18, FontStyle.Bold, TextAnchor.MiddleCenter); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); return b; }
-    private static Text Label(string name, Transform parent, int size, FontStyle style, TextAnchor anchor) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); Text t = go.AddComponent<Text>(); t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); t.fontSize = size; t.fontStyle = style; t.alignment = anchor; t.horizontalOverflow = HorizontalWrapMode.Wrap; t.verticalOverflow = VerticalWrapMode.Overflow; return t; }
+    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = Panel(text + "Button", parent, color); Button b = go.AddComponent<Button>(); ColorBlock cb = b.colors; cb.highlightedColor = Color.Lerp(color, Color.white, 0.18f); cb.pressedColor = Color.Lerp(color, Color.black, 0.12f); b.colors = cb; b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); return b; }
+    private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions alignment) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); TextMeshProUGUI t = go.AddComponent<TextMeshProUGUI>(); t.font = TmpFontUtility.GetFont(); t.fontSize = size; t.fontStyle = style; t.alignment = alignment; t.enableWordWrapping = true; t.overflowMode = TextOverflowModes.Overflow; return t; }
     private static void Stretch(RectTransform rt) { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
     private static void Place(RectTransform rt, Vector2 min, Vector2 max, Vector2 offMin, Vector2 offMax) { rt.anchorMin = min; rt.anchorMax = max; rt.offsetMin = offMin; rt.offsetMax = offMax; }
 }

@@ -1,12 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 public class OrganismView : MonoBehaviour
 {
     private RectTransform rectTransform;
     private Image bodyImage;
     private Image healthFill;
-    private Text label;
+    private TextMeshProUGUI label;
     private Vector2 basePosition;
     private float bobSeed;
     private Color baseColor;
@@ -46,15 +47,15 @@ public class OrganismView : MonoBehaviour
         textRect.offsetMin = Vector2.zero;
         textRect.offsetMax = Vector2.zero;
 
-        label = textObject.AddComponent<Text>();
-        label.alignment = TextAnchor.MiddleCenter;
-        label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        label.fontStyle = FontStyle.Bold;
+        label = textObject.AddComponent<TextMeshProUGUI>();
+        label.alignment = TextAlignmentOptions.Center;
+        label.font = TmpFontUtility.GetFont();
+        label.fontStyle = FontStyles.Bold;
         label.text = displayName.Substring(0, 1);
         label.color = new Color(0.1f, 0.15f, 0.2f);
-        label.resizeTextForBestFit = true;
-        label.resizeTextMinSize = 12;
-        label.resizeTextMaxSize = 24;
+        label.enableAutoSizing = true;
+        label.fontSizeMin = 12;
+        label.fontSizeMax = 24;
 
         GameObject healthRoot = new GameObject("HealthBar");
         RectTransform healthRootRect = healthRoot.AddComponent<RectTransform>();

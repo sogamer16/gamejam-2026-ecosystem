@@ -2,7 +2,9 @@ using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro;
 
+[ExecuteAlways]
 public class SetupSceneController : MonoBehaviour
 {
     private readonly string[] difficulties = { "Easy", "Normal", "Hard" };
@@ -13,18 +15,39 @@ public class SetupSceneController : MonoBehaviour
     private int jarIndex = 0;
     private int temperatureLevel = 1;
 
-    private Text difficultyValue;
-    private Text jarValue;
-    private Text temperatureValue;
+    private TextMeshProUGUI difficultyValue;
+    private TextMeshProUGUI jarValue;
+    private TextMeshProUGUI temperatureValue;
 
     private void Awake()
     {
+        if (!Application.isPlaying)
+        {
+            BuildUi();
+            return;
+        }
+
         BuildUi();
         RefreshValues();
     }
 
+    private void OnEnable()
+    {
+        if (!Application.isPlaying)
+        {
+            BuildUi();
+        }
+    }
+
     private void BuildUi()
     {
+        Canvas existingCanvas = FindNamedCanvas("SetupCanvas");
+        if (existingCanvas != null)
+        {
+            BindExistingUi(existingCanvas.gameObject);
+            return;
+        }
+
         GameObject canvasObject = new GameObject("SetupCanvas");
         Canvas canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -39,12 +62,12 @@ public class SetupSceneController : MonoBehaviour
         GameObject card = Panel("Card", canvas.transform, new Color(0.9f, 0.95f, 0.97f, 0.97f));
         Place(card.GetComponent<RectTransform>(), new Vector2(0.2f, 0.1f), new Vector2(0.8f, 0.9f), Vector2.zero, Vector2.zero);
 
-        Text title = Label("Title", card.transform, 54, FontStyle.Bold, TextAnchor.UpperCenter);
+        TextMeshProUGUI title = Label("Title", card.transform, 54, FontStyles.Bold, TextAlignmentOptions.Top);
         Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -40f), new Vector2(-40f, -110f));
         title.text = "Glass World";
         title.color = new Color(0.12f, 0.18f, 0.22f);
 
-        Text subtitle = Label("Subtitle", card.transform, 22, FontStyle.Normal, TextAnchor.UpperCenter);
+        TextMeshProUGUI subtitle = Label("Subtitle", card.transform, 22, FontStyles.Normal, TextAlignmentOptions.Top);
         Place(subtitle.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -118f), new Vector2(0f, -176f));
         subtitle.text = "Choose your starting settings before entering the card-driven jar.";
         subtitle.color = new Color(0.23f, 0.33f, 0.4f);
@@ -56,13 +79,33 @@ public class SetupSceneController : MonoBehaviour
         top -= 110f;
         CreateControl(card.transform, "Starting Temperature", "Initial water temperature.", top, ChangeTemperature, out temperatureValue);
 
-        Text hint = Label("Hint", card.transform, 18, FontStyle.Normal, TextAnchor.MiddleCenter);
+        TextMeshProUGUI hint = Label("Hint", card.transform, 18, FontStyles.Normal, TextAlignmentOptions.Center);
         Place(hint.rectTransform, new Vector2(0.1f, 0f), new Vector2(0.9f, 0f), new Vector2(0f, 134f), new Vector2(0f, 198f));
         hint.text = "Balanced + Normal is the recommended first card run.";
         hint.color = new Color(0.22f, 0.32f, 0.39f);
 
         Button playButton = CreateUiButton("Start Game", card.transform, new Color(0.36f, 0.78f, 0.54f), StartGame);
         Place(playButton.GetComponent<RectTransform>(), new Vector2(0.35f, 0f), new Vector2(0.65f, 0f), new Vector2(0f, 44f), new Vector2(0f, 108f));
+    }
+
+    private void BindExistingUi(GameObject canvasObject)
+    {
+        difficultyValue = FindText(canvasObject.transform, "DifficultyValue");
+        jarValue = FindText(canvasObject.transform, "Starting JarValue");
+        if (jarValue == null) jarValue = FindText(canvasObject.transform, "StartingJarValue");
+        temperatureValue = FindText(canvasObject.transform, "Starting TemperatureValue");
+        if (temperatureValue == null) temperatureValue = FindText(canvasObject.transform, "StartingTemperatureValue");
+        RebindButton(canvasObject.transform, "-Button", () => ChangeDifficulty(-1), 0);
+        RebindButton(canvasObject.transform, "+Button", () => ChangeDifficulty(1), 0);
+        RebindButton(canvasObject.transform, "-Button", () => ChangeJar(-1), 1);
+        RebindButton(canvasObject.transform, "+Button", () => ChangeJar(1), 1);
+        RebindButton(canvasObject.transform, "-Button", () => ChangeTemperature(-1), 2);
+        RebindButton(canvasObject.transform, "+Button", () => ChangeTemperature(1), 2);
+        RebindButton(canvasObject.transform, "Start GameButton", StartGame);
+        if (difficultyValue != null && jarValue != null && temperatureValue != null)
+        {
+            RefreshValues();
+        }
     }
 
     private void ChangeDifficulty(int delta) { difficultyIndex = Mathf.Clamp(difficultyIndex + delta, 0, difficulties.Length - 1); RefreshValues(); }
@@ -82,17 +125,17 @@ public class SetupSceneController : MonoBehaviour
         SceneManager.LoadScene("SampleScene");
     }
 
-    private void CreateControl(Transform parent, string label, string hint, float top, Action<int> onAdjust, out Text valueText)
+    private void CreateControl(Transform parent, string label, string hint, float top, Action<int> onAdjust, out TextMeshProUGUI valueText)
     {
         GameObject box = Panel(label + "Box", parent, new Color(0.79f, 0.87f, 0.91f, 0.75f));
         Place(box.GetComponent<RectTransform>(), new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, top), new Vector2(0f, top - 90f));
 
-        Text labelText = Label(label + "Label", box.transform, 22, FontStyle.Bold, TextAnchor.UpperLeft);
+        TextMeshProUGUI labelText = Label(label + "Label", box.transform, 22, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(labelText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -10f), new Vector2(-18f, -36f));
         labelText.text = label;
         labelText.color = new Color(0.11f, 0.17f, 0.22f);
 
-        Text hintText = Label(label + "Hint", box.transform, 14, FontStyle.Normal, TextAnchor.UpperLeft);
+        TextMeshProUGUI hintText = Label(label + "Hint", box.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(hintText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -34f), new Vector2(-18f, -54f));
         hintText.text = hint;
         hintText.color = new Color(0.24f, 0.33f, 0.39f);
@@ -100,7 +143,7 @@ public class SetupSceneController : MonoBehaviour
         Button minus = CreateUiButton("-", box.transform, new Color(0.91f, 0.61f, 0.4f), delegate { onAdjust(-1); });
         Place(minus.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 10f), new Vector2(86f, 48f));
 
-        valueText = Label(label + "Value", box.transform, 22, FontStyle.Bold, TextAnchor.MiddleCenter);
+        valueText = Label(label + "Value", box.transform, 22, FontStyles.Bold, TextAlignmentOptions.Center);
         Place(valueText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(96f, 8f), new Vector2(-96f, 50f));
         valueText.color = new Color(0.11f, 0.17f, 0.22f);
 
@@ -127,26 +170,111 @@ public class SetupSceneController : MonoBehaviour
         colors.pressedColor = Color.Lerp(color, Color.black, 0.12f);
         button.colors = colors;
         button.onClick.AddListener(onClick);
-        Text label = Label(text + "Text", go.transform, 20, FontStyle.Bold, TextAnchor.MiddleCenter);
+        TextMeshProUGUI label = Label(text + "Text", go.transform, 20, FontStyles.Bold, TextAlignmentOptions.Center);
         label.text = text;
         label.color = new Color(0.11f, 0.15f, 0.19f);
         Stretch(label.rectTransform);
         return button;
     }
 
-    private static Text Label(string name, Transform parent, int size, FontStyle style, TextAnchor anchor)
+    private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions anchor)
     {
         GameObject go = new GameObject(name);
         RectTransform rt = go.AddComponent<RectTransform>();
         rt.SetParent(parent, false);
-        Text text = go.AddComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
+        text.font = TmpFontUtility.GetFont();
         text.fontSize = size;
         text.fontStyle = style;
         text.alignment = anchor;
-        text.horizontalOverflow = HorizontalWrapMode.Wrap;
-        text.verticalOverflow = VerticalWrapMode.Overflow;
+        text.enableWordWrapping = true;
+        text.overflowMode = TextOverflowModes.Overflow;
         return text;
+    }
+
+    private static TextMeshProUGUI FindText(Transform parent, string name)
+    {
+        Transform match = FindChildRecursive(parent, name);
+        return match != null ? match.GetComponent<TextMeshProUGUI>() : null;
+    }
+
+    private static Transform FindChildRecursive(Transform parent, string name)
+    {
+        if (parent.name == name)
+        {
+            return parent;
+        }
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform match = FindChildRecursive(parent.GetChild(i), name);
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static Canvas FindNamedCanvas(string targetName)
+    {
+        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            if (canvases[i] != null && canvases[i].gameObject.name == targetName)
+            {
+                return canvases[i];
+            }
+        }
+
+        return null;
+    }
+
+    private void RebindButton(Transform root, string name, UnityEngine.Events.UnityAction action, int occurrence = 0)
+    {
+        Button button = FindButton(root, name, occurrence);
+        if (button == null)
+        {
+            return;
+        }
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(action);
+    }
+
+    private static Button FindButton(Transform root, string name, int occurrence = 0)
+    {
+        int seen = 0;
+        return FindButtonRecursive(root, name, occurrence, ref seen);
+    }
+
+    private static Button FindButtonRecursive(Transform parent, string name, int occurrence, ref int seen)
+    {
+        if (parent.name == name)
+        {
+            Button button = parent.GetComponent<Button>();
+            if (button != null)
+            {
+                if (seen == occurrence)
+                {
+                    return button;
+                }
+
+                seen++;
+            }
+        }
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Button result = FindButtonRecursive(parent.GetChild(i), name, occurrence, ref seen);
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
+        return null;
     }
 
     private static void Stretch(RectTransform rt)
