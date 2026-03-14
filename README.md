@@ -5,9 +5,9 @@ Unity prototype scaffold for a small 2D jam game: `Micro-Ecosystem in a Jar`.
 ## What's in the project
 
 - A runtime-generated jam prototype under `ecosystem gamejam/Assets/Scripts`
-- Menu, HUD, restart flow, and result overlay
+- Menu, HUD, restart flow, card hand, and result overlay
 - Three organism types: algae, snail, and fish
-- Auto-ticking ecosystem simulation with health, reproduction, extinction, and a 20 stable day win condition
+- Card-driven ecosystem simulation with health, reproduction, extinction, and a stable-day win condition
 
 ## How to run
 
@@ -18,9 +18,9 @@ Unity prototype scaffold for a small 2D jam game: `Micro-Ecosystem in a Jar`.
 ## Prototype controls
 
 - Click `Start Prototype` to begin.
-- Click organism buttons to add more life to the jar.
-- Press `Space` to force the next day tick.
-- Keep all three species alive for `20` stable days.
+- Keep 3 cards in hand and select 1 card to play each day.
+- Click `Play Selected Card` or press `Space` to resolve the turn and draw 1 replacement card.
+- Keep algae, snails, and fish alive while stabilizing the jar.
 
 ## Good next steps in Unity
 

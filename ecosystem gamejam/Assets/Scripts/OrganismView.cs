@@ -9,6 +9,7 @@ public class OrganismView : MonoBehaviour
     private Text label;
     private Vector2 basePosition;
     private float bobSeed;
+    private Color baseColor;
 
     public SpeciesType Species { get; private set; }
     public float Health { get; private set; }
@@ -26,6 +27,7 @@ public class OrganismView : MonoBehaviour
         Health = 1f;
         basePosition = anchoredPosition;
         bobSeed = Random.Range(0f, 10f);
+        baseColor = color;
 
         rectTransform = gameObject.AddComponent<RectTransform>();
         rectTransform.SetParent(parent, false);
@@ -131,6 +133,12 @@ public class OrganismView : MonoBehaviour
         else
         {
             healthFill.color = new Color(0.92f, 0.35f, 0.31f);
+        }
+
+        if (bodyImage != null)
+        {
+            Color faded = Color.Lerp(baseColor, new Color(0.82f, 0.84f, 0.82f, 1f), 1f - Health);
+            bodyImage.color = faded;
         }
     }
 }

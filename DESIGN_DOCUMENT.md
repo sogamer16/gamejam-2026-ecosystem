@@ -2,13 +2,26 @@
 
 ## Overview
 
-Glass World is a short PC simulation game where the player manages a living jar by adjusting daily light and fish food. The challenge is balancing algae, fish, snails, and nitrates without triggering an algae bloom.
+Glass World is a short PC strategy-simulation game where the player manages a living jar by playing cards that affect the ecosystem. Instead of adjusting sliders every day, the player draws a small hand, chooses 1 to 2 actions, and then watches the jar simulate the consequences. The challenge is balancing algae, fish, snails, and nitrates without triggering an algae bloom.
+
+## Core Idea
+
+Cards represent actions on the ecosystem.
+
+Each day:
+
+1. Draw 3 cards.
+2. Play 1 to 2 cards.
+3. Update the ecosystem.
+4. Read the results and plan the next turn.
+
+This makes the game more strategic, less repetitive, and more surprising.
 
 ## Core Loop
 
 1. Read the jar state.
-2. Adjust `Light`.
-3. Adjust `Fish Food`.
+2. Draw 3 cards from the ecosystem deck.
+3. Choose 1 to 2 cards to play.
 4. Advance one day.
 5. React to warnings, random events, and population changes.
 6. Repeat until the ecosystem stabilizes or collapses.
@@ -21,17 +34,12 @@ Glass World is a short PC simulation game where the player manages a living jar 
 
 ## Main Systems
 
-### Light
+### Card Actions
 
-- Controlled by the player each day.
-- More light increases algae growth.
-- Too much light increases bloom risk.
-
-### Fish Food
-
-- Controlled by the player each day.
-- More food helps fish directly but increases nitrates.
-- Less food makes fish graze algae.
+- The player does not directly tune sliders.
+- Cards apply ecosystem actions such as changing light, feeding fish, cleaning water, or adding organisms.
+- Most cards create a clear benefit plus a trade-off.
+- Some cards have immediate effects, while others create delayed consequences.
 
 ### Algae
 
@@ -42,7 +50,7 @@ Glass World is a short PC simulation game where the player manages a living jar 
 
 ### Fish
 
-- Need enough daily food to remain healthy.
+- Need enough support from feeding cards to remain healthy.
 - Produce nitrates through waste.
 - When underfed, they eat algae.
 - Reproduce slowly when the ecosystem is healthy.
@@ -83,6 +91,157 @@ Glass World is a short PC simulation game where the player manages a living jar 
 - Increase algae growth.
 - Must remain readable and understandable to the player.
 
+## Card Strategy Layer
+
+The player should regularly face questions like:
+
+- Do I remove algae now or reduce nitrates first?
+- Should I underfeed fish to control algae?
+- Is a powerful risk card worth the danger?
+- Do I build long-term stability or solve today's emergency?
+
+Each turn should feel like a small ecosystem puzzle.
+
+## Card Categories
+
+### Environment Cards
+
+- `Increase Light`: +15 percent light today, algae grows faster.
+- `Cloudy Day`: light reduced, algae growth slows.
+- `Dim Light`: safer algae control, but may reduce food for algae-eaters.
+- `Sunny Day`: strong algae growth this turn.
+
+### Fish Cards
+
+- `Feed Fish`: fish hunger satisfied, small nitrate increase.
+- `Underfeed Fish`: fish eat algae, but repeated use risks weak fish.
+- `Overfeed Fish`: fish health improves, but nitrates rise sharply.
+- `Add Fish`: add 1 fish and increase long-term nitrate production.
+- `Remove Fish`: remove 1 fish and reduce long-term nitrate production.
+
+### Snail Cards
+
+- `Add Snail`: add 1 snail.
+- `Snail Eggs`: add 2 snails.
+- `Snail Loss`: remove 1 snail.
+
+### Algae Cards
+
+- `Remove Algae`: remove 20 algae.
+- `Algae Growth`: moderate algae increase.
+- `Algae Surge`: large algae increase.
+- `Algae Die-Off`: large algae decrease.
+- `Balanced Growth`: algae grows slowly and safely.
+
+### Water And Nitrate Cards
+
+- `Clean Water`: reduce nitrates significantly.
+- `Partial Water Change`: reduce nitrates and algae slightly.
+- `Nutrient Spike`: increase nitrates significantly.
+- `Filter System`: reduce nitrates for the next 2 days.
+- `Waste Build-Up`: nitrates increase slowly for 2 days.
+
+### Risk Cards
+
+- Risk cards are powerful but dangerous.
+- `Strong Light`: major algae growth with high bloom risk.
+- `Overfeed Fish`: immediate fish relief with a heavy nitrate cost.
+- These cards add tension and make high-pressure turns more interesting.
+
+### Random Event Cards
+
+- Some cards appear automatically as events instead of being drawn from the normal deck.
+- Examples: `Snail Eggs`, `Fish Disease`, and `Nutrient Spike`.
+- These events make each run feel different and force adaptation.
+
+## Example Turn
+
+Day 4 draw:
+
+- `Feed Fish`
+- `Clean Water`
+- `Increase Light`
+
+Player chooses:
+
+- `Feed Fish`
+- `Clean Water`
+
+Then the simulation runs.
+
+Result:
+
+- Fish stay healthy.
+- Nitrates drop.
+- Algae remains stable.
+
+## Balanced Deck
+
+The base deck contains 22 cards.
+
+### Fish Control (5)
+
+1. `Feed Fish`
+2. `Underfeed Fish`
+3. `Overfeed Fish`
+4. `Add Fish`
+5. `Remove Fish`
+
+### Snail Control (3)
+
+6. `Add Snail`
+7. `Snail Eggs`
+8. `Snail Loss`
+
+### Algae Control (5)
+
+9. `Remove Algae`
+10. `Algae Growth`
+11. `Algae Surge`
+12. `Algae Die-Off`
+13. `Balanced Growth`
+
+### Light Control (4)
+
+14. `Increase Light`
+15. `Dim Light`
+16. `Sunny Day`
+17. `Cloudy Day`
+
+### Water And Nitrates (5)
+
+18. `Clean Water`
+19. `Partial Water Change`
+20. `Nutrient Spike`
+21. `Filter System`
+22. `Waste Build-Up`
+
+## Why This Deck Works
+
+It creates three main strategic tensions:
+
+- Fish versus algae: underfeeding lowers algae, but feeding raises nitrates.
+- Light versus bloom: more light accelerates algae, but too little light can starve algae eaters.
+- Population versus stability: more fish create waste, while more snails improve algae control.
+
+## Suggested Card Rarity
+
+- Common: `Feed Fish`, `Dim Light`, `Remove Algae`
+- Uncommon: `Clean Water`, `Snail Eggs`
+- Rare: `Filter System`, `Algae Surge`
+- Danger: `Nutrient Spike`, `Waste Build-Up`
+
+## Optional Wildcard Card
+
+`Ecosystem Shock`
+
+- Random major change:
+- Add 2 snails.
+- Or algae +30.
+- Or nitrates -20.
+
+This pushes the player to adapt quickly and makes runs less predictable.
+
 ## Critical Foundations
 
 1. The player must understand why events happened through warnings and summaries.
@@ -98,7 +257,7 @@ Glass World is a short PC simulation game where the player manages a living jar 
 
 ## Features To Include
 
-1. Random daily events.
+1. Random event cards.
 2. Water color feedback.
 3. Species icons with health.
 4. Bloom failure feedback.
@@ -111,7 +270,7 @@ Glass World is a short PC simulation game where the player manages a living jar 
 11. Ecosystem diagram.
 12. Day reports after each turn.
 13. The jar visually reacts to ecosystem health.
-14. Stronger random daily events.
+14. Stronger random event cards.
 15. A fourth species.
 16. Fish personalities.
 17. Water temperature.
@@ -143,7 +302,7 @@ Glass World is a short PC simulation game where the player manages a living jar 
 - Heat Wave
 - Cold Snap
 
-These should force adaptation without instantly ending the run.
+These should appear as event cards or turn modifiers that force adaptation without instantly ending the run.
 
 ## Milestones
 
@@ -164,8 +323,10 @@ These provide extra goals beyond simple survival.
 - Perfect run count
 - Nitrate value
 - Bloom threshold
-- Light control
-- Fish food control
+- Draw pile
+- Discard pile
+- Current hand of 3 cards
+- Play area for chosen cards
 - Daily event panel
 - Warning panel
 - Species counts
@@ -214,7 +375,7 @@ Examples:
 - One scene
 - One jar
 - Three species
-- No inventory
+- No deckbuilding between runs
 - No save system
 - No pathfinding
 - No large progression system

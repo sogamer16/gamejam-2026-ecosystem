@@ -46,7 +46,7 @@ public class SetupSceneController : MonoBehaviour
 
         Text subtitle = Label("Subtitle", card.transform, 22, FontStyle.Normal, TextAnchor.UpperCenter);
         Place(subtitle.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -118f), new Vector2(0f, -176f));
-        subtitle.text = "Choose your starting settings before entering the jar.";
+        subtitle.text = "Choose your starting settings before entering the card-driven jar.";
         subtitle.color = new Color(0.23f, 0.33f, 0.4f);
 
         float top = -220f;
@@ -58,7 +58,7 @@ public class SetupSceneController : MonoBehaviour
 
         Text hint = Label("Hint", card.transform, 18, FontStyle.Normal, TextAnchor.MiddleCenter);
         Place(hint.rectTransform, new Vector2(0.1f, 0f), new Vector2(0.9f, 0f), new Vector2(0f, 134f), new Vector2(0f, 198f));
-        hint.text = "Balanced + Normal is the recommended first run.";
+        hint.text = "Balanced + Normal is the recommended first card run.";
         hint.color = new Color(0.22f, 0.32f, 0.39f);
 
         Button playButton = CreateUiButton("Start Game", card.transform, new Color(0.36f, 0.78f, 0.54f), StartGame);
