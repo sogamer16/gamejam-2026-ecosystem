@@ -94,6 +94,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
         {
             descText.text = summary;
             descText.color = new Color(0.21f, 0.16f, 0.12f);
+            descText.fontSize = 35f;
             descText.enableWordWrapping = true;
             descText.lineSpacing = 6f;
         }

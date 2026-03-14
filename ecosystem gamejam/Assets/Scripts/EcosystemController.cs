@@ -34,6 +34,15 @@ public class EcosystemController : MonoBehaviour
         public float Lifetime;
         public float MaxLifetime;
     }
+    private sealed class BubbleFx
+    {
+        public Transform Transform;
+        public float Speed;
+        public float Drift;
+        public float Phase;
+        public float TopY;
+        public float BottomY;
+    }
     private sealed class TurnState
     {
         public int LightBonus;
@@ -66,6 +75,7 @@ public class EcosystemController : MonoBehaviour
     private readonly List<RectTransform> cardRoots = new List<RectTransform>();
     private readonly List<Image> cardShines = new List<Image>();
     private readonly List<UiSpark> uiSparks = new List<UiSpark>();
+    private readonly List<BubbleFx> bubbles = new List<BubbleFx>();
 
     private GameState state = GameState.Menu;
     private DifficultyMode difficulty = DifficultyMode.Normal;
@@ -78,6 +88,14 @@ public class EcosystemController : MonoBehaviour
     private GameObject nueCardPrefab;
     private Sprite shirtFrontSprite;
     private Sprite shirtAccentSprite;
+    private readonly List<GameObject> fishPrefabs = new List<GameObject>();
+    private GameObject snailPrefab;
+    private Transform jarWorldRoot;
+    private Transform jarCreatureRoot;
+    private Transform jarFxRoot;
+    private Renderer jarWaterRenderer;
+    private Light tableKeyLight;
+    private Light jarFillLight;
     private RectTransform jarArea;
     private RectTransform rightPanelRect;
     private RectTransform jarRect;
@@ -112,6 +130,7 @@ public class EcosystemController : MonoBehaviour
     private float stability;
     private float algaeMemory;
     private float bloomFlash;
+    private float displayedLightLevel = 3f;
     private string latestWarnings;
     private string dayReport;
     private string latestMilestone;
@@ -139,7 +158,10 @@ public class EcosystemController : MonoBehaviour
     {
         if (!Application.isPlaying)
         {
+            if (!CanBuildEditorArtifacts()) return;
             foilShader = Shader.Find("Custom/CardFoilUI");
+            LoadCreaturePrefabs();
+            EnsurePresentationWorld();
             BuildVisuals();
             return;
         }
@@ -149,6 +171,7 @@ public class EcosystemController : MonoBehaviour
         nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
         shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
         shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
+        LoadCreaturePrefabs();
         defs[SpeciesType.Algae] = new SpeciesDef { Name = "Algae", Color = new Color(0.43f, 0.79f, 0.36f) };
         defs[SpeciesType.Snail] = new SpeciesDef { Name = "Snail", Color = new Color(0.92f, 0.73f, 0.45f) };
         defs[SpeciesType.Fish] = new SpeciesDef { Name = "Fish", Color = new Color(0.42f, 0.72f, 0.96f) };
@@ -166,12 +189,45 @@ public class EcosystemController : MonoBehaviour
     {
         if (!Application.isPlaying)
         {
+            if (!CanBuildEditorArtifacts()) return;
             foilShader = Shader.Find("Custom/CardFoilUI");
             nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
             shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
             shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
+            LoadCreaturePrefabs();
+            EnsurePresentationWorld();
             BuildVisuals();
         }
+    }
+
+    [ContextMenu("Rebuild 3D Jar World")]
+    private void RebuildJarWorldInEditor()
+    {
+        GameObject existing = GameObject.Find("EcosystemJarWorld");
+        if (existing != null)
+        {
+            if (Application.isPlaying) Destroy(existing);
+            else DestroyImmediate(existing);
+        }
+
+        jarWorldRoot = null;
+        jarCreatureRoot = null;
+        jarFxRoot = null;
+        jarWaterRenderer = null;
+        tableKeyLight = null;
+        jarFillLight = null;
+        bubbles.Clear();
+        EnsurePresentationWorld();
+    }
+
+    private bool CanBuildEditorArtifacts()
+    {
+        if (Application.isPlaying) return false;
+        if (this == null || gameObject == null) return false;
+        Scene scene = gameObject.scene;
+        if (!scene.IsValid() || !scene.isLoaded) return false;
+        if (string.IsNullOrEmpty(scene.path)) return false;
+        return true;
     }
 
     private void Update()
@@ -185,7 +241,9 @@ public class EcosystemController : MonoBehaviour
         UpdateCardPresentation();
         UpdateSparks();
         UpdateScreenShake();
+        UpdateSceneLighting();
         UpdateWater();
+        UpdateJarFx();
     }
 
     private void BuildVisuals()
@@ -221,17 +279,17 @@ public class EcosystemController : MonoBehaviour
         scaler.referenceResolution = new Vector2(1920f, 1080f);
         c.AddComponent<GraphicRaycaster>();
 
-        GameObject bg = Panel("BG", canvas.transform, new Color(0.31f, 0.25f, 0.19f));
+        GameObject bg = Panel("BG", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.02f));
         Stretch(bg.GetComponent<RectTransform>());
-        GameObject felt = Panel("Felt", canvas.transform, new Color(0.17f, 0.28f, 0.2f, 0.9f));
+        GameObject felt = Panel("Felt", canvas.transform, new Color(0.17f, 0.28f, 0.2f, 0.02f));
         Place(felt.GetComponent<RectTransform>(), new Vector2(0.24f, 0.02f), new Vector2(0.99f, 0.99f), Vector2.zero, Vector2.zero);
-        GameObject vignetteTop = Panel("VignetteTop", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.16f));
+        GameObject vignetteTop = Panel("VignetteTop", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.04f));
         Place(vignetteTop.GetComponent<RectTransform>(), new Vector2(0f, 0.88f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
-        GameObject vignetteBottom = Panel("VignetteBottom", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.2f));
+        GameObject vignetteBottom = Panel("VignetteBottom", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.06f));
         Place(vignetteBottom.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0.16f), Vector2.zero, Vector2.zero);
 
-        GameObject left = Panel("Left", canvas.transform, new Color(0.1f, 0.17f, 0.15f, 0.97f));
-        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.28f, 1f), Vector2.zero, Vector2.zero);
+        GameObject left = Panel("Left", canvas.transform, new Color(0.06f, 0.1f, 0.1f, 0.78f));
+        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.22f, 1f), Vector2.zero, Vector2.zero);
         TextMeshProUGUI title = Label("Title", left.transform, 38, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -24f), new Vector2(-24f, -82f));
         title.text = "Glass World";
@@ -262,8 +320,8 @@ public class EcosystemController : MonoBehaviour
         Button restart = CreateUiButton("Restart Run", left.transform, new Color(0.86f, 0.42f, 0.34f), StartGame);
         Place(restart.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 302f), new Vector2(-24f, 362f));
 
-        GameObject right = Panel("Right", canvas.transform, new Color(0.2f, 0.3f, 0.24f, 0.08f));
-        Place(right.GetComponent<RectTransform>(), new Vector2(0.3f, 0.04f), new Vector2(0.98f, 0.97f), Vector2.zero, Vector2.zero);
+        GameObject right = Panel("Right", canvas.transform, new Color(0.2f, 0.3f, 0.24f, 0.005f));
+        Place(right.GetComponent<RectTransform>(), new Vector2(0.22f, 0.02f), new Vector2(0.995f, 0.985f), Vector2.zero, Vector2.zero);
         rightPanelRect = right.GetComponent<RectTransform>();
         Outline o = right.AddComponent<Outline>();
         o.effectColor = new Color(0.16f, 0.28f, 0.22f, 0.8f);
@@ -281,28 +339,14 @@ public class EcosystemController : MonoBehaviour
         Place(speciesText.rectTransform, new Vector2(0.45f, 1f), new Vector2(1f, 1f), new Vector2(6f, -76f), new Vector2(-24f, -154f));
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
 
-        GameObject jar = Panel("Jar", right.transform, new Color(0.81f, 0.92f, 0.95f, 0.18f));
-        Place(jar.GetComponent<RectTransform>(), new Vector2(0.08f, 0.22f), new Vector2(0.92f, 0.78f), Vector2.zero, Vector2.zero);
-        jarRect = jar.GetComponent<RectTransform>();
-        Outline jarOutline = jar.AddComponent<Outline>();
-        jarOutline.effectColor = new Color(0.18f, 0.32f, 0.27f, 0.8f);
-        jarOutline.effectDistance = new Vector2(4f, 4f);
-        Shadow jarShadow = jar.AddComponent<Shadow>();
-        jarShadow.effectColor = new Color(0f, 0f, 0f, 0.22f);
-        jarShadow.effectDistance = new Vector2(0f, -12f);
-        water = Panel("Water", jar.transform, new Color(0.62f, 0.86f, 0.96f, 0.5f)).GetComponent<Image>();
-        Place(water.rectTransform, new Vector2(0.05f, 0.12f), new Vector2(0.95f, 0.9f), Vector2.zero, Vector2.zero);
-        lightGlow = Panel("LightGlow", jar.transform, new Color(1f, 0.97f, 0.74f, 0.16f)).GetComponent<Image>();
-        Place(lightGlow.rectTransform, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.95f), Vector2.zero, Vector2.zero);
-        playFlash = Panel("PlayFlash", jar.transform, new Color(1f, 1f, 1f, 0f)).GetComponent<Image>();
-        Stretch(playFlash.rectTransform);
-        GameObject layer = new GameObject("Organisms");
-        jarArea = layer.AddComponent<RectTransform>();
-        jarArea.SetParent(jar.transform, false);
-        Place(jarArea, new Vector2(0.08f, 0.14f), new Vector2(0.92f, 0.88f), Vector2.zero, Vector2.zero);
+        jarRect = null;
+        water = null;
+        lightGlow = null;
+        playFlash = null;
+        jarArea = null;
 
         TextMeshProUGUI handLabel = Label("HandLabel", right.transform, 24, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(handLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 210f), new Vector2(-24f, 248f));
+        Place(handLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 150f), new Vector2(-24f, 188f));
         handLabel.text = "Today's Hand";
         handLabel.color = new Color(0.13f, 0.2f, 0.16f);
         CreateCardSlots(right.transform);
@@ -313,19 +357,7 @@ public class EcosystemController : MonoBehaviour
         Stretch(tooltipText.rectTransform);
         tooltipText.color = Color.white;
         tooltipPanel.SetActive(false);
-
-        menuPanel = Panel("Menu", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.85f));
-        Stretch(menuPanel.GetComponent<RectTransform>());
-        TextMeshProUGUI mt = Label("MenuTitle", menuPanel.transform, 56, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(mt.rectTransform, new Vector2(0.18f, 0.56f), new Vector2(0.82f, 0.8f), Vector2.zero, Vector2.zero);
-        mt.text = "Glass World";
-        mt.color = Color.white;
-        TextMeshProUGUI mb = Label("MenuBody", menuPanel.transform, 24, FontStyles.Normal, TextAlignmentOptions.Center);
-        Place(mb.rectTransform, new Vector2(0.16f, 0.36f), new Vector2(0.84f, 0.56f), Vector2.zero, Vector2.zero);
-        mb.text = "Keep a hand of 3 cards. Play 1 each day, draw 1 replacement, and adapt to the jar.";
-        mb.color = new Color(0.87f, 0.93f, 0.9f);
-        Button play = CreateUiButton("Start Prototype", menuPanel.transform, new Color(0.39f, 0.78f, 0.54f), StartGame);
-        Place(play.GetComponent<RectTransform>(), new Vector2(0.39f, 0.22f), new Vector2(0.61f, 0.31f), Vector2.zero, Vector2.zero);
+        menuPanel = null;
 
         resultPanel = Panel("Result", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.85f));
         Stretch(resultPanel.GetComponent<RectTransform>());
@@ -342,14 +374,32 @@ public class EcosystemController : MonoBehaviour
         ClearVisualCaches();
         canvas = canvasObject.GetComponent<Canvas>();
         rightPanelRect = FindRect(canvasObject.transform, "Right");
-        jarRect = FindRect(canvasObject.transform, "Jar");
-        jarArea = FindRect(canvasObject.transform, "Organisms");
+        RectTransform legacyJar = FindRect(canvasObject.transform, "Jar");
+        if (legacyJar != null)
+        {
+            if (Application.isPlaying) Destroy(legacyJar.gameObject);
+            else DestroyImmediate(legacyJar.gameObject);
+        }
+        RectTransform legacyAnchor = FindRect(canvasObject.transform, "JarAnchor");
+        if (legacyAnchor != null)
+        {
+            if (Application.isPlaying) Destroy(legacyAnchor.gameObject);
+            else DestroyImmediate(legacyAnchor.gameObject);
+        }
+        jarRect = null;
+        jarArea = null;
         drawPileMarker = FindRect(canvasObject.transform, "DrawPileMarker");
         discardPileMarker = FindRect(canvasObject.transform, "DiscardPileMarker");
         water = FindImage(canvasObject.transform, "Water");
         lightGlow = FindImage(canvasObject.transform, "LightGlow");
         playFlash = FindImage(canvasObject.transform, "PlayFlash");
-        menuPanel = FindObject(canvasObject.transform, "Menu");
+        GameObject legacyMenu = FindObject(canvasObject.transform, "Menu");
+        if (legacyMenu != null)
+        {
+            if (Application.isPlaying) Destroy(legacyMenu);
+            else DestroyImmediate(legacyMenu);
+        }
+        menuPanel = null;
         resultPanel = FindObject(canvasObject.transform, "Result");
         tooltipPanel = FindObject(canvasObject.transform, "Tooltip");
         bannerText = FindText(canvasObject.transform, "Banner");
@@ -363,10 +413,18 @@ public class EcosystemController : MonoBehaviour
         resultText = FindText(canvasObject.transform, "ResultText");
         tooltipText = FindText(canvasObject.transform, "TooltipText");
 
-        if (canvas == null || rightPanelRect == null || jarRect == null || jarArea == null || bannerText == null || menuPanel == null || resultPanel == null)
+        if (canvas == null || rightPanelRect == null || bannerText == null || resultPanel == null)
         {
             return false;
         }
+        Image bgImage = FindImage(canvasObject.transform, "BG");
+        if (bgImage != null) bgImage.color = new Color(0.02f, 0.03f, 0.03f, 0.02f);
+        Image feltImage = FindImage(canvasObject.transform, "Felt");
+        if (feltImage != null) feltImage.color = new Color(0.17f, 0.28f, 0.2f, 0.02f);
+        Image rightImage = FindImage(canvasObject.transform, "Right");
+        if (rightImage != null) rightImage.color = new Color(0.2f, 0.3f, 0.24f, 0.005f);
+        Image leftImage = FindImage(canvasObject.transform, "Left");
+        if (leftImage != null) leftImage.color = new Color(0.06f, 0.1f, 0.1f, 0.78f);
         for (int i = 0; i < 3; i++)
         {
             RectTransform slotRect = FindRect(canvasObject.transform, "Card" + i);
@@ -416,6 +474,7 @@ public class EcosystemController : MonoBehaviour
 
     private void EnsurePresentationWorld()
     {
+        bool createdCamera = false;
         if (sceneCamera == null)
         {
             Camera existing = Camera.main;
@@ -427,6 +486,7 @@ public class EcosystemController : MonoBehaviour
             {
                 GameObject cameraObject = new GameObject("CardTableCamera");
                 sceneCamera = cameraObject.AddComponent<Camera>();
+                createdCamera = true;
             }
         }
 
@@ -436,14 +496,18 @@ public class EcosystemController : MonoBehaviour
         sceneCamera.farClipPlane = 200f;
         sceneCamera.clearFlags = CameraClearFlags.SolidColor;
         sceneCamera.backgroundColor = new Color(0.08f, 0.11f, 0.1f);
-        sceneCamera.transform.position = new Vector3(0f, 2.7f, -9.4f);
-        sceneCamera.transform.rotation = Quaternion.Euler(14f, 0f, 0f);
+        if (createdCamera)
+        {
+            sceneCamera.transform.position = new Vector3(0.7f, 2.0f, -5.6f);
+            sceneCamera.transform.rotation = Quaternion.Euler(14f, -12f, 0f);
+        }
         if (sceneCamera.GetComponent<UniversalAdditionalCameraData>() == null)
         {
             sceneCamera.gameObject.AddComponent<UniversalAdditionalCameraData>();
         }
 
-        if (GameObject.Find("CardTableLight") == null)
+        GameObject existingTableLight = GameObject.Find("CardTableLight");
+        if (existingTableLight == null)
         {
             GameObject lightObject = new GameObject("CardTableLight");
             Light light = lightObject.AddComponent<Light>();
@@ -452,6 +516,28 @@ public class EcosystemController : MonoBehaviour
             light.color = new Color(1f, 0.96f, 0.9f);
             light.shadows = LightShadows.Soft;
             lightObject.transform.rotation = Quaternion.Euler(44f, -26f, 0f);
+            tableKeyLight = light;
+        }
+        else
+        {
+            tableKeyLight = existingTableLight.GetComponent<Light>();
+        }
+
+        GameObject existingFillLight = GameObject.Find("JarFillLight");
+        if (existingFillLight == null)
+        {
+            GameObject fillLightObject = new GameObject("JarFillLight");
+            Light fillLight = fillLightObject.AddComponent<Light>();
+            fillLight.type = LightType.Point;
+            fillLight.intensity = 4.5f;
+            fillLight.range = 12f;
+            fillLight.color = new Color(0.72f, 0.9f, 1f);
+            fillLightObject.transform.position = new Vector3(4.4f, 1.8f, 5.2f);
+            jarFillLight = fillLight;
+        }
+        else
+        {
+            jarFillLight = existingFillLight.GetComponent<Light>();
         }
 
         if (GameObject.Find("CardTableSurface") == null)
@@ -518,6 +604,12 @@ public class EcosystemController : MonoBehaviour
             colorAdjustments.contrast.Override(10f);
             colorAdjustments.saturation.Override(8f);
         }
+
+        EnsureJarWorld();
+        if (jarWorldRoot != null && createdCamera)
+        {
+            sceneCamera.transform.LookAt(jarWorldRoot.position + new Vector3(0f, 0.7f, 0f));
+        }
     }
 
     private void CreateCardSlots(Transform parent)
@@ -581,27 +673,13 @@ public class EcosystemController : MonoBehaviour
 
     private void ShowMenu()
     {
-        if (Application.isPlaying && SceneManager.GetActiveScene().path == "Assets/Scenes/SampleScene.unity")
-        {
-            StartGame();
-            return;
-        }
-
-        state = GameState.Menu;
-        menuPanel.SetActive(true);
-        resultPanel.SetActive(false);
-        jarName = "Your Jar";
-        latestWarnings = "No warnings yet.";
-        dayReport = "Draw cards, commit to a plan, and let the ecosystem react.";
-        currentEvent = null;
-        RefreshHud();
-        if (GameSettingsStore.HasSelection) StartGame();
+        StartGame();
     }
 
     private void StartGame()
     {
-        menuPanel.SetActive(false);
-        resultPanel.SetActive(false);
+        if (menuPanel != null) menuPanel.SetActive(false);
+        if (resultPanel != null) resultPanel.SetActive(false);
         state = GameState.Playing;
         difficulty = GameSettingsStore.HasSelection ? (DifficultyMode)GameSettingsStore.DifficultyIndex : DifficultyMode.Normal;
         startingJar = GameSettingsStore.HasSelection ? (StartingJar)GameSettingsStore.StartingJarIndex : StartingJar.Balanced;
@@ -731,12 +809,10 @@ public class EcosystemController : MonoBehaviour
     {
         isResolvingCard = true;
         int playedIndex = hand.IndexOf(playedCard);
-        if (playedIndex >= 0 && playedIndex < cardRoots.Count && jarRect != null)
+        if (playedIndex >= 0 && playedIndex < cardRoots.Count)
         {
-            Vector3 worldTarget = jarRect.TransformPoint(jarRect.rect.center);
-            Vector2 jarTarget = (Vector2)rightPanelRect.InverseTransformPoint(worldTarget);
+            Vector2 jarTarget = GetJarScreenTarget();
             StartCardAnimation(playedIndex, jarTarget, 0f, 1.08f, 1.18f, 1f, 1f, 0.22f);
-            if (playFlash != null) playFlash.color = new Color(1f, 1f, 1f, 0.22f);
             yield return WaitForCardAnimation();
             CreateSparkBurst(playAnimTarget, playedCard.Color, 12);
             screenShakeTime = 0.15f;
@@ -971,12 +1047,6 @@ public class EcosystemController : MonoBehaviour
                 if (i < cardCanvasGroups.Count && cardCanvasGroups[i] != null)
                 {
                     cardCanvasGroups[i].alpha = Mathf.Lerp(playAnimStartAlpha, playAnimTargetAlpha, eased);
-                }
-                if (playFlash != null)
-                {
-                    Color flash = playFlash.color;
-                    flash.a = Mathf.Lerp(0.22f, 0f, eased);
-                    playFlash.color = flash;
                 }
                 continue;
             }
@@ -1231,6 +1301,23 @@ public class EcosystemController : MonoBehaviour
         return rect;
     }
 
+    private Vector2 GetJarScreenTarget()
+    {
+        if (rightPanelRect == null)
+        {
+            return Vector2.zero;
+        }
+
+        if (jarWorldRoot != null && sceneCamera != null)
+        {
+            Vector3 screenPoint = sceneCamera.WorldToScreenPoint(jarWorldRoot.position + new Vector3(0f, 0.8f, 0f));
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(rightPanelRect, screenPoint, sceneCamera, out Vector2 localPoint);
+            return localPoint;
+        }
+
+        return new Vector2(0f, 120f);
+    }
+
     private void ClearVisualCaches()
     {
         cardButtons.Clear();
@@ -1238,6 +1325,7 @@ public class EcosystemController : MonoBehaviour
         cardCanvasGroups.Clear();
         cardRoots.Clear();
         cardShines.Clear();
+        bubbles.Clear();
         hoveredCardIndex = -1;
         animatingCardIndex = -1;
         animatingDrawCardIndex = -1;
@@ -1430,9 +1518,16 @@ public class EcosystemController : MonoBehaviour
         SpeciesDef d = defs[type];
         GameObject go = new GameObject(d.Name);
         OrganismView view = go.AddComponent<OrganismView>();
-        view.Initialize(type, d.Name, d.Color, whiteSprite, jarArea, new Vector2(UnityEngine.Random.Range(-360f, 360f), UnityEngine.Random.Range(-220f, 220f)));
+        EnsureJarWorld();
+        view.Initialize(type, d.Name, d.Color, jarCreatureRoot, RandomCreaturePosition(type), GetCreaturePrefab(type), GetCreatureScale(type));
+        if (type == SpeciesType.Fish)
+        {
+            GetFishSwimArea(out Vector3 swimExtents, out float floorY, out float surfaceY);
+            view.ConfigureFishSwimArea(swimExtents, floorY, surfaceY);
+        }
         organisms.Add(view);
         if (type == SpeciesType.Fish) fishTraits[view] = RandomFishTrait();
+        if (type == SpeciesType.Algae) UpdateAlgaeVisualScale();
     }
 
     private void RemoveSpecies(SpeciesType type, int amount)
@@ -1444,6 +1539,7 @@ public class EcosystemController : MonoBehaviour
             if (fishTraits.ContainsKey(view)) fishTraits.Remove(view);
             organisms.Remove(view);
             Destroy(view.gameObject);
+            if (type == SpeciesType.Algae) UpdateAlgaeVisualScale();
         }
     }
 
@@ -1480,11 +1576,368 @@ public class EcosystemController : MonoBehaviour
         if (algae >= bloomThreshold - 2f) target = Color.Lerp(target, new Color(0.12f, 0.5f, 0.16f, 0.82f), 0.55f);
         if (fish == 0 && state == GameState.Result) target = Color.Lerp(target, new Color(0.34f, 0.42f, 0.34f, 0.88f), 0.7f);
         if (bloomFlash > 0f) { bloomFlash = Mathf.Max(0f, bloomFlash - Time.deltaTime); float pulse = 0.5f + (Mathf.Sin(Time.time * 12f) * 0.5f); target = Color.Lerp(target, new Color(0.2f, 0.85f, 0.2f, 0.85f), pulse); }
+        target.a = 0.1f;
         water.color = Color.Lerp(water.color, target, Time.deltaTime * 3.5f);
-        if (lightGlow != null) lightGlow.color = Color.Lerp(lightGlow.color, new Color(1f, 0.97f, 0.74f, 0.22f), Time.deltaTime * 4f);
+        float lightT = Mathf.InverseLerp(0f, 5f, displayedLightLevel);
+        if (lightGlow != null)
+        {
+            Color glowColor = Color.Lerp(new Color(0.72f, 0.77f, 0.84f, 0.03f), new Color(1f, 0.97f, 0.74f, 0.16f), lightT);
+            lightGlow.color = Color.Lerp(lightGlow.color, glowColor, Time.deltaTime * 4f);
+        }
+        if (jarWaterRenderer != null && jarWaterRenderer.material != null)
+        {
+            Color worldWater = Color.Lerp(
+                new Color(target.r * 0.72f, target.g * 0.78f, target.b * 0.86f, 0.38f),
+                new Color(Mathf.Min(1f, target.r + 0.08f), Mathf.Min(1f, target.g + 0.08f), Mathf.Min(1f, target.b + 0.04f), 0.46f),
+                lightT);
+            if (jarWaterRenderer.material.HasProperty("_BaseColor")) jarWaterRenderer.material.SetColor("_BaseColor", worldWater);
+            else if (jarWaterRenderer.material.HasProperty("_Color")) jarWaterRenderer.material.color = worldWater;
+        }
+    }
+
+    private void UpdateSceneLighting()
+    {
+        float targetLightLevel = GetDisplayedLightLevel();
+        displayedLightLevel = Mathf.Lerp(displayedLightLevel, targetLightLevel, Time.deltaTime * 4f);
+        float lightT = Mathf.InverseLerp(0f, 5f, displayedLightLevel);
+
+        if (tableKeyLight != null)
+        {
+            tableKeyLight.intensity = Mathf.Lerp(0.45f, 1.7f, lightT);
+            tableKeyLight.color = Color.Lerp(new Color(0.72f, 0.78f, 0.9f), new Color(1f, 0.95f, 0.82f), lightT);
+            tableKeyLight.transform.rotation = Quaternion.Slerp(
+                tableKeyLight.transform.rotation,
+                Quaternion.Euler(Mathf.Lerp(60f, 38f, lightT), Mathf.Lerp(-12f, -30f, lightT), 0f),
+                Time.deltaTime * 2.5f);
+        }
+
+        if (jarFillLight != null)
+        {
+            jarFillLight.intensity = Mathf.Lerp(1.4f, 6.8f, lightT);
+            jarFillLight.range = Mathf.Lerp(8f, 13f, lightT);
+            jarFillLight.color = Color.Lerp(new Color(0.66f, 0.76f, 0.88f), new Color(1f, 0.94f, 0.72f), lightT);
+        }
+    }
+
+    private float GetDisplayedLightLevel()
+    {
+        if (state != GameState.Playing)
+        {
+            return 3f;
+        }
+
+        TurnState preview = new TurnState();
+        if (currentEvent != null)
+        {
+            currentEvent.Apply(preview);
+        }
+
+        for (int i = 0; i < selected.Count; i++)
+        {
+            selected[i].Apply(preview);
+        }
+
+        return Mathf.Clamp(3f + preview.LightBonus, 0f, 5f);
     }
 
     private FishTrait RandomFishTrait() { int roll = UnityEngine.Random.Range(0, 4); return roll == 0 ? FishTrait.Hungry : roll == 1 ? FishTrait.Lazy : roll == 2 ? FishTrait.Fragile : FishTrait.Balanced; }
+    private void LoadCreaturePrefabs()
+    {
+        if (fishPrefabs.Count > 0 || snailPrefab != null) return;
+        fishPrefabs.Add(Resources.Load<GameObject>("EcosystemCreatures/Fish_B"));
+        fishPrefabs.Add(Resources.Load<GameObject>("EcosystemCreatures/Fish_B"));
+        fishPrefabs.Add(Resources.Load<GameObject>("EcosystemCreatures/Fish_B"));
+        fishPrefabs.RemoveAll(prefab => prefab == null);
+        snailPrefab = Resources.Load<GameObject>("EcosystemCreatures/Snail_Surrogate");
+    }
+
+    private void EnsureJarWorld()
+    {
+        if (jarWorldRoot != null) return;
+
+        GameObject existing = GameObject.Find("EcosystemJarWorld");
+        if (existing != null)
+        {
+            jarWorldRoot = existing.transform;
+            jarWorldRoot.position = new Vector3(4.1f, 0.2f, 8.4f);
+            jarWorldRoot.localScale = Vector3.one * 1.35f;
+            Transform creatures = jarWorldRoot.Find("Creatures");
+            if (creatures != null) jarCreatureRoot = creatures;
+            Transform fx = jarWorldRoot.Find("FX");
+            if (fx != null) jarFxRoot = fx;
+            Transform waterRoot = jarWorldRoot.Find("WaterVolume");
+            if (waterRoot != null) jarWaterRenderer = waterRoot.GetComponent<Renderer>();
+            return;
+        }
+
+        GameObject root = new GameObject("EcosystemJarWorld");
+        jarWorldRoot = root.transform;
+        jarWorldRoot.position = new Vector3(4.1f, 0.2f, 8.4f);
+        jarWorldRoot.localScale = Vector3.one * 1.35f;
+
+        GameObject basePedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        basePedestal.name = "JarBase";
+        basePedestal.transform.SetParent(jarWorldRoot, false);
+        basePedestal.transform.localPosition = new Vector3(0f, -2.75f, 0f);
+        basePedestal.transform.localScale = new Vector3(2.45f, 0.22f, 2.45f);
+        Renderer baseRenderer = basePedestal.GetComponent<Renderer>();
+        if (baseRenderer != null) baseRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.17f, 0.14f, 0.11f, 1f), false);
+
+        GameObject glass = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        glass.name = "GlassShell";
+        glass.transform.SetParent(jarWorldRoot, false);
+        glass.transform.localScale = new Vector3(2.2f, 2.7f, 2.2f);
+        Renderer glassRenderer = glass.GetComponent<Renderer>();
+        if (glassRenderer != null) glassRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.82f, 0.94f, 0.98f, 0.12f), true);
+
+        GameObject innerGlass = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        innerGlass.name = "InnerGlass";
+        innerGlass.transform.SetParent(jarWorldRoot, false);
+        innerGlass.transform.localScale = new Vector3(2.06f, 2.62f, 2.06f);
+        Renderer innerGlassRenderer = innerGlass.GetComponent<Renderer>();
+        if (innerGlassRenderer != null) innerGlassRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.9f, 0.98f, 1f, 0.04f), true);
+
+        GameObject rim = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        rim.name = "JarRim";
+        rim.transform.SetParent(jarWorldRoot, false);
+        rim.transform.localPosition = new Vector3(0f, 2.78f, 0f);
+        rim.transform.localScale = new Vector3(2.28f, 0.08f, 2.28f);
+        Renderer rimRenderer = rim.GetComponent<Renderer>();
+        if (rimRenderer != null) rimRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.9f, 0.95f, 0.98f, 0.32f), true);
+
+        GameObject waterVolume = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        waterVolume.name = "WaterVolume";
+        waterVolume.transform.SetParent(jarWorldRoot, false);
+        waterVolume.transform.localPosition = new Vector3(0f, -0.2f, 0f);
+        waterVolume.transform.localScale = new Vector3(2.0f, 2.1f, 2.0f);
+        jarWaterRenderer = waterVolume.GetComponent<Renderer>();
+        if (jarWaterRenderer != null) jarWaterRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.62f, 0.86f, 0.96f, 0.42f), true);
+
+        GameObject waterSurface = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        waterSurface.name = "WaterSurface";
+        waterSurface.transform.SetParent(jarWorldRoot, false);
+        waterSurface.transform.localPosition = new Vector3(0f, 1.9f, 0f);
+        waterSurface.transform.localScale = new Vector3(1.96f, 0.02f, 1.96f);
+        Renderer waterSurfaceRenderer = waterSurface.GetComponent<Renderer>();
+        if (waterSurfaceRenderer != null) waterSurfaceRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.84f, 0.96f, 1f, 0.22f), true);
+
+        GameObject gravel = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        gravel.name = "Gravel";
+        gravel.transform.SetParent(jarWorldRoot, false);
+        gravel.transform.localPosition = new Vector3(0f, -2.42f, 0f);
+        gravel.transform.localScale = new Vector3(1.9f, 0.18f, 1.9f);
+        Renderer gravelRenderer = gravel.GetComponent<Renderer>();
+        if (gravelRenderer != null) gravelRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.36f, 0.29f, 0.24f, 1f), false);
+
+        GameObject moss = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        moss.name = "MossRing";
+        moss.transform.SetParent(jarWorldRoot, false);
+        moss.transform.localPosition = new Vector3(0f, -2.18f, 0f);
+        moss.transform.localScale = new Vector3(1.82f, 0.03f, 1.82f);
+        Renderer mossRenderer = moss.GetComponent<Renderer>();
+        if (mossRenderer != null) mossRenderer.sharedMaterial = CreateWorldMaterial(new Color(0.2f, 0.36f, 0.18f, 1f), false);
+
+        GameObject creaturesRoot = new GameObject("Creatures");
+        jarCreatureRoot = creaturesRoot.transform;
+        jarCreatureRoot.SetParent(jarWorldRoot, false);
+
+        GameObject fxRoot = new GameObject("FX");
+        jarFxRoot = fxRoot.transform;
+        jarFxRoot.SetParent(jarWorldRoot, false);
+        CreateJarPlants();
+        CreateJarBubbles();
+    }
+
+    private Material CreateWorldMaterial(Color color, bool transparent)
+    {
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null) shader = Shader.Find("Standard");
+        Material material = new Material(shader);
+        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+        else if (material.HasProperty("_Color")) material.color = color;
+        if (transparent)
+        {
+            material.renderQueue = 3000;
+            if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 1f);
+        }
+        return material;
+    }
+
+    private Vector3 RandomCreaturePosition(SpeciesType type)
+    {
+        if (type == SpeciesType.Snail)
+        {
+            float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+            return new Vector3(UnityEngine.Random.Range(0.85f, 1.25f) * side, UnityEngine.Random.Range(-1.65f, -0.7f), UnityEngine.Random.Range(-0.95f, 0.95f));
+        }
+        if (type == SpeciesType.Algae)
+        {
+            float ring = UnityEngine.Random.Range(0.55f, 1.15f);
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            return new Vector3(Mathf.Cos(angle) * ring, UnityEngine.Random.Range(-1.7f, 0.5f), Mathf.Sin(angle) * ring);
+        }
+
+        GetFishSwimArea(out Vector3 swimExtents, out float floorY, out float surfaceY);
+        Vector2 circle = UnityEngine.Random.insideUnitCircle * 0.82f;
+        return new Vector3(
+            circle.x * swimExtents.x,
+            UnityEngine.Random.Range(floorY + 0.2f, surfaceY - 0.2f),
+            circle.y * swimExtents.z);
+    }
+
+    private void GetFishSwimArea(out Vector3 swimExtents, out float floorY, out float surfaceY)
+    {
+        swimExtents = new Vector3(0.9f, 1.2f, 0.9f);
+        floorY = -1.5f;
+        surfaceY = 1.35f;
+
+        if (jarWorldRoot == null) return;
+
+        Transform water = jarWorldRoot.Find("WaterVolume");
+        Transform glass = jarWorldRoot.Find("GlassShell");
+        Transform rim = jarWorldRoot.Find("JarRim");
+        Transform gravel = jarWorldRoot.Find("Gravel");
+
+        if (water != null)
+        {
+            swimExtents.x = Mathf.Max(0.25f, (water.localScale.x * 0.5f) - 0.18f);
+            swimExtents.z = Mathf.Max(0.25f, (water.localScale.z * 0.5f) - 0.18f);
+            floorY = water.localPosition.y - water.localScale.y + 0.22f;
+            surfaceY = water.localPosition.y + water.localScale.y - 0.3f;
+        }
+
+        if (glass != null)
+        {
+            float glassRadiusX = Mathf.Max(0.25f, (glass.localScale.x * 0.5f) - 0.22f);
+            float glassRadiusZ = Mathf.Max(0.25f, (glass.localScale.z * 0.5f) - 0.22f);
+            swimExtents.x = Mathf.Min(swimExtents.x, glassRadiusX);
+            swimExtents.z = Mathf.Min(swimExtents.z, glassRadiusZ);
+        }
+
+        if (rim != null)
+        {
+            surfaceY = Mathf.Min(surfaceY, rim.localPosition.y - 0.45f);
+        }
+
+        if (gravel != null)
+        {
+            floorY = Mathf.Max(floorY, gravel.localPosition.y + gravel.localScale.y + 0.15f);
+        }
+
+        if (surfaceY <= floorY + 0.4f)
+        {
+            surfaceY = floorY + 0.4f;
+        }
+    }
+
+    private GameObject GetCreaturePrefab(SpeciesType type)
+    {
+        if (type == SpeciesType.Fish && fishPrefabs.Count > 0) return fishPrefabs[UnityEngine.Random.Range(0, fishPrefabs.Count)];
+        if (type == SpeciesType.Snail) return null;
+        return null;
+    }
+
+    private float GetCreatureScale(SpeciesType type)
+    {
+        if (type == SpeciesType.Fish) return 10f;
+        if (type == SpeciesType.Snail) return 0.18f;
+        return 0.18f;
+    }
+
+    private void UpdateAlgaeVisualScale()
+    {
+        List<OrganismView> algae = Species(SpeciesType.Algae);
+        if (algae.Count == 0)
+        {
+            return;
+        }
+
+        float scaleMultiplier = Mathf.Lerp(1f, 1.9f, Mathf.Clamp01(algae.Count / 18f));
+        for (int i = 0; i < algae.Count; i++)
+        {
+            OrganismView view = algae[i];
+            if (view == null)
+            {
+                continue;
+            }
+
+            view.SetVisualScaleMultiplier(view.GetBaseVisualScale() * scaleMultiplier);
+        }
+    }
+
+    private void CreateJarPlants()
+    {
+        if (jarFxRoot == null) return;
+        for (int i = 0; i < 6; i++)
+        {
+            GameObject plantRoot = new GameObject("Plant_" + i);
+            plantRoot.transform.SetParent(jarFxRoot, false);
+            float angle = (Mathf.PI * 2f * i) / 6f;
+            float radius = UnityEngine.Random.Range(0.7f, 1.15f);
+            plantRoot.transform.localPosition = new Vector3(Mathf.Cos(angle) * radius, -2.18f, Mathf.Sin(angle) * radius);
+            plantRoot.transform.localRotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+
+            int stalks = UnityEngine.Random.Range(3, 6);
+            for (int s = 0; s < stalks; s++)
+            {
+                GameObject stalk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                stalk.transform.SetParent(plantRoot.transform, false);
+                stalk.transform.localScale = new Vector3(0.06f, UnityEngine.Random.Range(0.35f, 0.8f), 0.06f);
+                stalk.transform.localPosition = new Vector3(UnityEngine.Random.Range(-0.12f, 0.12f), stalk.transform.localScale.y * 0.5f, UnityEngine.Random.Range(-0.12f, 0.12f));
+                stalk.transform.localRotation = Quaternion.Euler(UnityEngine.Random.Range(-10f, 10f), 0f, UnityEngine.Random.Range(-14f, 14f));
+                Renderer renderer = stalk.GetComponent<Renderer>();
+                if (renderer != null) renderer.sharedMaterial = CreateWorldMaterial(new Color(0.22f, 0.46f, 0.2f, 1f), false);
+            }
+        }
+    }
+
+    private void CreateJarBubbles()
+    {
+        bubbles.Clear();
+        if (jarFxRoot == null) return;
+        for (int i = 0; i < 16; i++)
+        {
+            GameObject bubble = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            bubble.name = "Bubble_" + i;
+            bubble.transform.SetParent(jarFxRoot, false);
+            float scale = UnityEngine.Random.Range(0.05f, 0.12f);
+            bubble.transform.localScale = Vector3.one * scale;
+            bubble.transform.localPosition = new Vector3(UnityEngine.Random.Range(-1.1f, 1.1f), UnityEngine.Random.Range(-2.0f, 1.6f), UnityEngine.Random.Range(-1.1f, 1.1f));
+            Renderer renderer = bubble.GetComponent<Renderer>();
+            if (renderer != null) renderer.sharedMaterial = CreateWorldMaterial(new Color(0.92f, 0.98f, 1f, 0.18f), true);
+            bubbles.Add(new BubbleFx
+            {
+                Transform = bubble.transform,
+                Speed = UnityEngine.Random.Range(0.18f, 0.38f),
+                Drift = UnityEngine.Random.Range(0.05f, 0.16f),
+                Phase = UnityEngine.Random.Range(0f, 10f),
+                BottomY = -2.05f,
+                TopY = 1.95f
+            });
+        }
+    }
+
+    private void UpdateJarFx()
+    {
+        if (bubbles.Count == 0) return;
+        float delta = Application.isPlaying ? Time.deltaTime : 0.016f;
+        for (int i = 0; i < bubbles.Count; i++)
+        {
+            BubbleFx bubble = bubbles[i];
+            if (bubble.Transform == null) continue;
+            Vector3 position = bubble.Transform.localPosition;
+            position.y += bubble.Speed * delta;
+            position.x += Mathf.Sin((Time.time * 1.8f) + bubble.Phase) * bubble.Drift * delta;
+            position.z += Mathf.Cos((Time.time * 1.4f) + bubble.Phase) * bubble.Drift * delta;
+            if (position.y > bubble.TopY)
+            {
+                position.y = bubble.BottomY;
+                position.x = UnityEngine.Random.Range(-1.05f, 1.05f);
+                position.z = UnityEngine.Random.Range(-1.05f, 1.05f);
+            }
+            bubble.Transform.localPosition = position;
+        }
+    }
     private void EndGame(bool won, string message)
     {
         state = GameState.Result;
