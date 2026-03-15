@@ -73,7 +73,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
         CreateOverlays();
     }
 
-    public void SetCard(string title, string summary, string category, bool risk, Color accentColor, Sprite artSprite, Sprite shirtSprite, RarityType rarity, bool selected, bool interactable)
+    public void SetCard(string title, string summary, string category, int requiredRoll, bool risk, Color accentColor, Sprite artSprite, Sprite shirtSprite, RarityType rarity, bool selected, bool interactable)
     {
         Initialize();
 
@@ -95,14 +95,14 @@ public class EcosystemCardPrefabView : MonoBehaviour
             descText.text = summary;
             descText.color = new Color(0.21f, 0.16f, 0.12f);
             descText.fontSize = 35f;
-            descText.enableWordWrapping = true;
+            descText.textWrappingMode = TextWrappingModes.Normal;
             descText.lineSpacing = 6f;
         }
 
         if (manaText != null)
         {
-            manaText.text = risk ? "3" : rarity == RarityType.Rare ? "2" : "1";
-            manaText.color = new Color(0.96f, 0.95f, 0.9f);
+            manaText.text = requiredRoll.ToString();
+            manaText.color = interactable ? new Color(0.96f, 0.95f, 0.9f) : new Color(0.96f, 0.72f, 0.72f);
         }
 
         if (cardImage != null)
@@ -224,7 +224,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
         label.fontSize = size;
         label.fontStyle = style;
         label.alignment = alignment;
-        label.enableWordWrapping = false;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
         label.raycastTarget = false;
         return label;
     }

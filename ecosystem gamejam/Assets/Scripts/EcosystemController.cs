@@ -11,21 +11,23 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 using NueGames.NueDeck.Scripts.Enums;
-
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 public enum SpeciesType { Algae, Snail, Fish, Shrimp }
 
 [ExecuteAlways]
 public class EcosystemController : MonoBehaviour
 {
     private enum GameState { Menu, Playing, Result }
-    private enum DifficultyMode { Easy, Normal, Hard }
+    private enum DifficultyMode { Easy, Medium, Hard }
     private enum StartingJar { Balanced, HighNitrates, SnailHeavy, Overgrown, Fragile }
     private enum FishTrait { Balanced, Hungry, Lazy, Fragile }
     private enum CardCategory { Fish, Snail, Algae, Light, Water, Risk }
+    private enum CardTier { Common, Uncommon, Rare }
 
     private sealed class SpeciesDef { public string Name; public Color Color; }
-    private sealed class CardDef { public string Name; public string Summary; public CardCategory Category; public Color Color; public bool Risk; public Action<TurnState> Apply; }
-    private sealed class EventDef { public string Name; public string Summary; public Action<TurnState> Apply; }
+    private sealed class CardDef { public string Name; public string Summary; public CardCategory Category; public CardTier Tier; public Color Color; public bool Risk; public Action<TurnState> Apply; }
     private sealed class UiSpark
     {
         public Image Image;
@@ -45,26 +47,66 @@ public class EcosystemController : MonoBehaviour
     }
     private sealed class TurnState
     {
-        public int LightBonus;
-        public float FeedBonus;
-        public float AppetiteMultiplier = 1f;
+        public float LightDelta;
+        public bool FeedFishPlayed;
+        public float FeedWasteMultiplier = 1f;
         public float NitrateBonus;
         public int AlgaeBonus;
         public int AddFish;
         public int RemoveFish;
         public int AddSnail;
         public int RemoveSnail;
-        public float FishHealthBonus;
-        public int ExtraFishGraze;
-        public int FilterDays;
-        public int WasteDays;
+        public bool TriggerRandomEvent;
         public readonly List<string> Notes = new List<string>();
+    }
+    private struct DifficultySettings
+    {
+        public int StartFish;
+        public int StartSnails;
+        public int StartAlgae;
+        public float StartNitrates;
+        public float StartLight;
+        public int StartRerolls;
+        public int StableDaysToWin;
+        public float BaseAlgaeGrowth;
+        public float LightGrowthPerPointAbove50;
+        public float NitrateGrowthPerPoint;
+        public float MemoryBleed;
+        public int AlgaeSoftCapStart;
+        public float AlgaeSoftCapMultiplier;
+        public float NitrateWarning;
+        public float NitrateCollapse;
+        public int AlgaeWarning;
+        public int AlgaeCollapse;
+        public float StableNitrateMax;
+        public int StableAlgaeMin;
+        public int StableAlgaeMax;
+        public int StableFishMin;
+        public int StableSnailMin;
+        public float FishWastePerTurn;
+        public int FishHungryGraze;
+        public int FishStarveTurns;
+        public bool FishStarveLoseOne;
+        public float FishReproductionChancePerFish;
+        public int FishReproductionMinAlgae;
+        public int SnailAlgaeEat;
+        public int SnailStarveThreshold;
+        public int SnailStarveTurns;
+        public bool SnailStarveLoseOne;
+        public float SnailReproductionChance;
+        public int SnailReproductionMinAlgae;
+        public float PassiveNitrateDecay;
+        public float FeedFishNitrateMultiplier;
+        public float BloomFeedbackNitrates;
+        public int UncommonUnlockRoll;
+        public int RareUnlockRoll;
     }
 
     private readonly Dictionary<SpeciesType, SpeciesDef> defs = new Dictionary<SpeciesType, SpeciesDef>();
     private readonly List<OrganismView> organisms = new List<OrganismView>();
     private readonly Dictionary<OrganismView, FishTrait> fishTraits = new Dictionary<OrganismView, FishTrait>();
     private readonly List<CardDef> deckTemplate = new List<CardDef>();
+    private readonly Dictionary<string, CardDef> cardLibrary = new Dictionary<string, CardDef>();
     private readonly List<CardDef> drawPile = new List<CardDef>();
     private readonly List<CardDef> discardPile = new List<CardDef>();
     private readonly List<CardDef> hand = new List<CardDef>();
@@ -78,7 +120,7 @@ public class EcosystemController : MonoBehaviour
     private readonly List<BubbleFx> bubbles = new List<BubbleFx>();
 
     private GameState state = GameState.Menu;
-    private DifficultyMode difficulty = DifficultyMode.Normal;
+    private DifficultyMode difficulty = DifficultyMode.Medium;
     private StartingJar startingJar = StartingJar.Balanced;
 
     private Sprite whiteSprite;
@@ -96,9 +138,7 @@ public class EcosystemController : MonoBehaviour
     private Renderer jarWaterRenderer;
     private Light tableKeyLight;
     private Light jarFillLight;
-    private RectTransform jarArea;
     private RectTransform rightPanelRect;
-    private RectTransform jarRect;
     private RectTransform drawPileMarker;
     private RectTransform discardPileMarker;
     private Image water;
@@ -123,20 +163,24 @@ public class EcosystemController : MonoBehaviour
     private int stableDays;
     private int perfectDays;
     private int temperatureLevel;
-    private int filterDaysRemaining;
-    private int wasteDaysRemaining;
+    private int rerollTokens;
+    private int currentDieRoll;
+    private int fishHungryTurns;
+    private int snailStarvingTurns;
     private int highNitrateDays;
     private float nitrateLevel;
     private float bloomThreshold;
     private float stability;
     private float algaeMemory;
     private float bloomFlash;
-    private float displayedLightLevel = 3f;
+    private float displayedLightLevel = 50f;
+    private float lightLevel = 50f;
+    private int previousTurnAlgaeCount;
+    private string lastRandomEventSummary;
     private string latestWarnings;
     private string dayReport;
     private string latestMilestone;
     private string jarName;
-    private EventDef currentEvent;
     private int hoveredCardIndex = -1;
     private bool isResolvingCard;
     private bool isPaused;
@@ -241,6 +285,10 @@ public class EcosystemController : MonoBehaviour
     {
         if (Application.isPlaying) return false;
         if (this == null || gameObject == null) return false;
+#if UNITY_EDITOR
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return false;
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating) return false;
+#endif
         Scene scene = gameObject.scene;
         if (!scene.IsValid() || !scene.isLoaded) return false;
         if (string.IsNullOrEmpty(scene.path)) return false;
@@ -318,100 +366,113 @@ public class EcosystemController : MonoBehaviour
         GameObject vignetteBottom = Panel("VignetteBottom", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.06f));
         Place(vignetteBottom.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0.16f), Vector2.zero, Vector2.zero);
 
-        GameObject left = Panel("Left", canvas.transform, new Color(0.06f, 0.1f, 0.1f, 0.78f));
-        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.22f, 1f), Vector2.zero, Vector2.zero);
-        TextMeshProUGUI title = Label("Title", left.transform, 38, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -24f), new Vector2(-24f, -82f));
+        GameObject left = Panel("Left", canvas.transform, new Color(0.05f, 0.08f, 0.09f, 0.6f));
+        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.17f, 1f), Vector2.zero, Vector2.zero);
+        TextMeshProUGUI title = Label("Title", left.transform, 30, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -18f), new Vector2(-18f, -58f));
         title.text = "Glass World";
         title.color = Color.white;
-        TextMeshProUGUI desc = Label("Desc", left.transform, 17, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -84f), new Vector2(-24f, -144f));
-        desc.text = "Keep 3 cards in hand. Play 1 each day, then draw 1 replacement.";
+        TextMeshProUGUI desc = Label("Desc", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -66f), new Vector2(-18f, -118f));
+        desc.text = "Roll 1d6 each day. Play 1 unlocked card, then draw 1 replacement.";
         desc.color = new Color(0.83f, 0.91f, 0.87f);
 
-        statsText = Label("Stats", left.transform, 18, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(statsText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -156f), new Vector2(-24f, -260f));
+        GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
+        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -132f), new Vector2(-14f, -270f));
+        UiThemeStyler.ApplyPanel(statsCard.GetComponent<Image>(), ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.92f));
+        statsText = Label("Stats", left.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(statsText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -144f), new Vector2(-22f, -232f));
         statsText.color = Color.white;
+        GameObject warningCard = Panel("WarningCard", left.transform, new Color(1f, 0.84f, 0.3f, 0.06f));
+        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -282f), new Vector2(-14f, -412f));
+        UiThemeStyler.ApplyPanel(warningCard.GetComponent<Image>(), ThemePanelKind.Notice, new Color(1f, 1f, 1f, 0.95f));
         warningText = Label("Warnings", left.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -264f), new Vector2(-24f, -342f));
+        Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -294f), new Vector2(-22f, -342f));
         warningText.color = new Color(0.98f, 0.84f, 0.4f);
-        eventText = Label("Event", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(eventText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -346f), new Vector2(-24f, -410f));
+        eventText = Label("Event", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(eventText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -346f), new Vector2(-22f, -384f));
         eventText.color = new Color(0.84f, 0.9f, 0.95f);
-        selectedText = Label("Selected", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(selectedText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -414f), new Vector2(-24f, -492f));
+        selectedText = Label("Selected", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(selectedText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -388f), new Vector2(-22f, -430f));
         selectedText.color = new Color(0.88f, 0.95f, 0.9f);
-        reportText = Label("Report", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(reportText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 180f), new Vector2(-24f, 24f));
+        GameObject reportCard = Panel("ReportCard", left.transform, new Color(1f, 1f, 1f, 0.04f));
+        Place(reportCard.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 172f));
+        UiThemeStyler.ApplyPanel(reportCard.GetComponent<Image>(), ThemePanelKind.Small, new Color(1f, 1f, 1f, 0.9f));
+        reportText = Label("Report", left.transform, 12, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(reportText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(22f, 22f), new Vector2(-22f, 164f));
         reportText.color = new Color(0.84f, 0.92f, 0.88f);
 
         Button next = CreateUiButton("Play Selected Card", left.transform, new Color(0.38f, 0.74f, 0.51f), TickDay);
-        Place(next.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 230f), new Vector2(-24f, 290f));
-        Button restart = CreateUiButton("Restart Run", left.transform, new Color(0.86f, 0.42f, 0.34f), StartGame);
-        Place(restart.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 302f), new Vector2(-24f, 362f));
+        Place(next.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(18f, 184f), new Vector2(-18f, 236f));
+        Button reroll = CreateUiButton("Re-roll Die", left.transform, new Color(0.88f, 0.82f, 0.46f), RerollDie);
+        Place(reroll.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(18f, 244f), new Vector2(-18f, 296f));
 
         GameObject right = Panel("Right", canvas.transform, new Color(0.2f, 0.3f, 0.24f, 0.005f));
-        Place(right.GetComponent<RectTransform>(), new Vector2(0.22f, 0.02f), new Vector2(0.995f, 0.985f), Vector2.zero, Vector2.zero);
+        Place(right.GetComponent<RectTransform>(), new Vector2(0.17f, 0.02f), new Vector2(0.995f, 0.985f), Vector2.zero, Vector2.zero);
         rightPanelRect = right.GetComponent<RectTransform>();
         Outline o = right.AddComponent<Outline>();
         o.effectColor = new Color(0.16f, 0.28f, 0.22f, 0.8f);
         o.effectDistance = new Vector2(4f, 4f);
 
-        bannerText = Label("Banner", right.transform, 28, FontStyles.Bold, TextAlignmentOptions.Top);
-        Place(bannerText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -18f), new Vector2(-24f, -70f));
+        bannerText = Label("Banner", right.transform, 22, FontStyles.Bold, TextAlignmentOptions.Top);
+        Place(bannerText.rectTransform, new Vector2(0.2f, 1f), new Vector2(0.8f, 1f), new Vector2(0f, -18f), new Vector2(0f, -54f));
         bannerText.color = new Color(0.13f, 0.2f, 0.16f);
-        deckText = Label("Deck", right.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(deckText.rectTransform, new Vector2(0f, 1f), new Vector2(0.35f, 1f), new Vector2(24f, -76f), new Vector2(-6f, -128f));
+        deckText = Label("Deck", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(deckText.rectTransform, new Vector2(0f, 1f), new Vector2(0.24f, 1f), new Vector2(24f, -68f), new Vector2(-8f, -104f));
         deckText.color = new Color(0.14f, 0.2f, 0.17f);
-        drawPileMarker = CreatePileMarker("DrawPileMarker", right.transform, new Vector2(122f, -152f), "Draw");
-        discardPileMarker = CreatePileMarker("DiscardPileMarker", right.transform, new Vector2(248f, -152f), "Discard");
-        speciesText = Label("Species", right.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopRight);
-        Place(speciesText.rectTransform, new Vector2(0.45f, 1f), new Vector2(1f, 1f), new Vector2(6f, -76f), new Vector2(-24f, -154f));
+        drawPileMarker = CreatePileMarker("DrawPileMarker", right.transform, new Vector2(110f, -126f), "Draw");
+        discardPileMarker = CreatePileMarker("DiscardPileMarker", right.transform, new Vector2(218f, -126f), "Discard");
+        speciesText = Label("Species", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopRight);
+        Place(speciesText.rectTransform, new Vector2(0.72f, 1f), new Vector2(1f, 1f), new Vector2(0f, -68f), new Vector2(-124f, -112f));
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
         Button pauseButton = CreateUiButton("Pause", right.transform, new Color(0.82f, 0.84f, 0.74f), TogglePause);
-        Place(pauseButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-204f, -24f), new Vector2(-24f, -80f));
+        Place(pauseButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-118f, -18f), new Vector2(-24f, -54f));
 
-        jarRect = null;
         water = null;
         lightGlow = null;
         playFlash = null;
-        jarArea = null;
 
-        TextMeshProUGUI handLabel = Label("HandLabel", right.transform, 24, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(handLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(24f, 150f), new Vector2(-24f, 188f));
+        TextMeshProUGUI handLabel = Label("HandLabel", right.transform, 20, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(handLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(140f, 132f), new Vector2(-140f, 166f));
         handLabel.text = "Today's Hand";
         handLabel.color = new Color(0.13f, 0.2f, 0.16f);
         CreateCardSlots(right.transform);
 
         tooltipPanel = Panel("Tooltip", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.92f));
-        Place(tooltipPanel.GetComponent<RectTransform>(), new Vector2(0.68f, 0.02f), new Vector2(0.96f, 0.12f), Vector2.zero, Vector2.zero);
+        Place(tooltipPanel.GetComponent<RectTransform>(), new Vector2(0.72f, 0.03f), new Vector2(0.95f, 0.105f), Vector2.zero, Vector2.zero);
         tooltipText = Label("TooltipText", tooltipPanel.transform, 15, FontStyles.Normal, TextAlignmentOptions.Center);
         Stretch(tooltipText.rectTransform);
         tooltipText.color = Color.white;
         tooltipPanel.SetActive(false);
         menuPanel = null;
 
-        resultPanel = Panel("Result", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.85f));
+        resultPanel = Panel("Result", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.76f));
         Stretch(resultPanel.GetComponent<RectTransform>());
-        resultText = Label("ResultText", resultPanel.transform, 44, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(resultText.rectTransform, new Vector2(0.14f, 0.38f), new Vector2(0.86f, 0.7f), Vector2.zero, Vector2.zero);
-        resultText.color = Color.white;
-        Button again = CreateUiButton("Play Again", resultPanel.transform, new Color(0.42f, 0.75f, 0.94f), StartGame);
-        Place(again.GetComponent<RectTransform>(), new Vector2(0.4f, 0.22f), new Vector2(0.6f, 0.3f), Vector2.zero, Vector2.zero);
+        GameObject resultCard = Panel("ResultCard", resultPanel.transform, new Color(1f, 1f, 1f, 1f));
+        Place(resultCard.GetComponent<RectTransform>(), new Vector2(0.3f, 0.26f), new Vector2(0.7f, 0.68f), Vector2.zero, Vector2.zero);
+        UiThemeStyler.ApplyPanel(resultCard.GetComponent<Image>(), ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
+        resultText = Label("ResultText", resultCard.transform, 32, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(resultText.rectTransform, new Vector2(0.08f, 0.32f), new Vector2(0.92f, 0.84f), Vector2.zero, Vector2.zero);
+        resultText.color = new Color(0.21f, 0.15f, 0.09f);
+        Button again = CreateUiButton("Play Again", resultCard.transform, new Color(0.42f, 0.75f, 0.94f), StartGame);
+        Place(again.GetComponent<RectTransform>(), new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.22f), Vector2.zero, Vector2.zero);
         resultPanel.SetActive(false);
 
-        pausePanel = Panel("Pause", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.82f));
+        pausePanel = Panel("Pause", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.76f));
         Stretch(pausePanel.GetComponent<RectTransform>());
-        TextMeshProUGUI pauseTitle = Label("PauseTitle", pausePanel.transform, 42, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(pauseTitle.rectTransform, new Vector2(0.28f, 0.6f), new Vector2(0.72f, 0.76f), Vector2.zero, Vector2.zero);
+        GameObject pauseCard = Panel("PauseCard", pausePanel.transform, new Color(1f, 1f, 1f, 1f));
+        Place(pauseCard.GetComponent<RectTransform>(), new Vector2(0.34f, 0.24f), new Vector2(0.66f, 0.68f), Vector2.zero, Vector2.zero);
+        UiThemeStyler.ApplyPanel(pauseCard.GetComponent<Image>(), ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
+        TextMeshProUGUI pauseTitle = Label("PauseTitle", pauseCard.transform, 34, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(pauseTitle.rectTransform, new Vector2(0.12f, 0.7f), new Vector2(0.88f, 0.88f), Vector2.zero, Vector2.zero);
         pauseTitle.text = "Paused";
-        pauseTitle.color = Color.white;
-        Button resumeButton = CreateUiButton("Resume", pausePanel.transform, new Color(0.42f, 0.75f, 0.94f), TogglePause);
-        Place(resumeButton.GetComponent<RectTransform>(), new Vector2(0.38f, 0.42f), new Vector2(0.62f, 0.5f), Vector2.zero, Vector2.zero);
-        Button pauseRestartButton = CreateUiButton("Restart Run", pausePanel.transform, new Color(0.86f, 0.42f, 0.34f), RestartFromPause);
-        Place(pauseRestartButton.GetComponent<RectTransform>(), new Vector2(0.38f, 0.31f), new Vector2(0.62f, 0.39f), Vector2.zero, Vector2.zero);
-        Button quitButton = CreateUiButton("Quit", pausePanel.transform, new Color(0.8f, 0.8f, 0.82f), QuitGame);
-        Place(quitButton.GetComponent<RectTransform>(), new Vector2(0.38f, 0.2f), new Vector2(0.62f, 0.28f), Vector2.zero, Vector2.zero);
+        pauseTitle.color = new Color(0.21f, 0.15f, 0.09f);
+        Button resumeButton = CreateUiButton("Resume", pauseCard.transform, new Color(0.42f, 0.75f, 0.94f), TogglePause);
+        Place(resumeButton.GetComponent<RectTransform>(), new Vector2(0.14f, 0.46f), new Vector2(0.86f, 0.6f), Vector2.zero, Vector2.zero);
+        Button pauseRestartButton = CreateUiButton("Restart Run", pauseCard.transform, new Color(0.86f, 0.42f, 0.34f), RestartFromPause);
+        Place(pauseRestartButton.GetComponent<RectTransform>(), new Vector2(0.14f, 0.28f), new Vector2(0.86f, 0.42f), Vector2.zero, Vector2.zero);
+        Button quitButton = CreateUiButton("Quit", pauseCard.transform, new Color(0.8f, 0.8f, 0.82f), QuitGame);
+        Place(quitButton.GetComponent<RectTransform>(), new Vector2(0.14f, 0.1f), new Vector2(0.86f, 0.24f), Vector2.zero, Vector2.zero);
         pausePanel.SetActive(false);
     }
 
@@ -441,7 +502,7 @@ public class EcosystemController : MonoBehaviour
     {
         Application.Quit();
 #if UNITY_EDITOR
-        Debug.Log("Quit requested.");
+        EditorApplication.isPlaying = false;
 #endif
     }
 
@@ -453,17 +514,13 @@ public class EcosystemController : MonoBehaviour
         RectTransform legacyJar = FindRect(canvasObject.transform, "Jar");
         if (legacyJar != null)
         {
-            if (Application.isPlaying) Destroy(legacyJar.gameObject);
-            else DestroyImmediate(legacyJar.gameObject);
+            CleanupLegacyUiObject(legacyJar.gameObject);
         }
         RectTransform legacyAnchor = FindRect(canvasObject.transform, "JarAnchor");
         if (legacyAnchor != null)
         {
-            if (Application.isPlaying) Destroy(legacyAnchor.gameObject);
-            else DestroyImmediate(legacyAnchor.gameObject);
+            CleanupLegacyUiObject(legacyAnchor.gameObject);
         }
-        jarRect = null;
-        jarArea = null;
         drawPileMarker = FindRect(canvasObject.transform, "DrawPileMarker");
         discardPileMarker = FindRect(canvasObject.transform, "DiscardPileMarker");
         water = FindImage(canvasObject.transform, "Water");
@@ -472,8 +529,12 @@ public class EcosystemController : MonoBehaviour
         GameObject legacyMenu = FindObject(canvasObject.transform, "Menu");
         if (legacyMenu != null)
         {
-            if (Application.isPlaying) Destroy(legacyMenu);
-            else DestroyImmediate(legacyMenu);
+            CleanupLegacyUiObject(legacyMenu);
+        }
+        GameObject legacyRestartButton = FindObject(canvasObject.transform, "Restart RunButton");
+        if (legacyRestartButton != null)
+        {
+            CleanupLegacyUiObject(legacyRestartButton);
         }
         menuPanel = null;
         resultPanel = FindObject(canvasObject.transform, "Result");
@@ -494,6 +555,7 @@ public class EcosystemController : MonoBehaviour
         {
             return false;
         }
+        ApplyThemeToExistingCanvas(canvasObject.transform);
         Image bgImage = FindImage(canvasObject.transform, "BG");
         if (bgImage != null) bgImage.color = new Color(0.02f, 0.03f, 0.03f, 0.02f);
         Image feltImage = FindImage(canvasObject.transform, "Felt");
@@ -543,10 +605,32 @@ public class EcosystemController : MonoBehaviour
         }
 
         RebindNamedButton(canvasObject.transform, "Play Selected CardButton", TickDay);
-        RebindNamedButton(canvasObject.transform, "Restart RunButton", StartGame);
+        RebindNamedButton(canvasObject.transform, "Re-roll DieButton", RerollDie);
+        RebindNamedButton(canvasObject.transform, "PauseButton", TogglePause);
+        RebindNamedButton(canvasObject.transform, "ResumeButton", TogglePause);
+        RebindNamedButton(canvasObject.transform, "Restart RunButton", RestartFromPause);
+        RebindNamedButton(canvasObject.transform, "QuitButton", QuitGame);
         RebindNamedButton(canvasObject.transform, "Start PrototypeButton", StartGame);
         RebindNamedButton(canvasObject.transform, "Play AgainButton", StartGame);
         return true;
+    }
+
+    private void CleanupLegacyUiObject(GameObject target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(target);
+            return;
+        }
+
+        target.SetActive(false);
+        target.hideFlags = HideFlags.HideInHierarchy;
+        target.name = "__LegacyHidden__" + target.name;
     }
 
     private void EnsurePresentationWorld()
@@ -705,8 +789,8 @@ public class EcosystemController : MonoBehaviour
             slotRect.anchorMin = new Vector2(0.5f, 0f);
             slotRect.anchorMax = new Vector2(0.5f, 0f);
             slotRect.pivot = new Vector2(0.5f, 0f);
-            slotRect.sizeDelta = new Vector2(270f, 370f);
-            slotRect.anchoredPosition = new Vector2((i - 1) * 250f, 18f);
+            slotRect.sizeDelta = new Vector2(220f, 310f);
+            slotRect.anchoredPosition = new Vector2((i - 1) * 210f, 28f);
             cardRoots.Add(slotRect);
             CanvasGroup canvasGroup = slot.GetComponent<CanvasGroup>();
             if (canvasGroup == null)
@@ -762,20 +846,27 @@ public class EcosystemController : MonoBehaviour
         if (resultPanel != null) resultPanel.SetActive(false);
         if (pausePanel != null) pausePanel.SetActive(false);
         state = GameState.Playing;
-        difficulty = GameSettingsStore.HasSelection ? (DifficultyMode)GameSettingsStore.DifficultyIndex : DifficultyMode.Normal;
+        difficulty = GameSettingsStore.HasSelection ? (DifficultyMode)GameSettingsStore.DifficultyIndex : DifficultyMode.Medium;
         startingJar = GameSettingsStore.HasSelection ? (StartingJar)GameSettingsStore.StartingJarIndex : StartingJar.Balanced;
         temperatureLevel = GameSettingsStore.HasSelection ? GameSettingsStore.TemperatureLevel : 1;
+        DifficultySettings settings = GetDifficultySettings();
         day = 1;
         stableDays = 0;
         perfectDays = 0;
-        nitrateLevel = 5f;
-        bloomThreshold = 14f;
+        rerollTokens = settings.StartRerolls;
+        currentDieRoll = 1;
+        fishHungryTurns = 0;
+        snailStarvingTurns = 0;
+        nitrateLevel = settings.StartNitrates;
+        lightLevel = settings.StartLight;
+        displayedLightLevel = lightLevel;
+        bloomThreshold = settings.AlgaeWarning;
         stability = 70f;
-        filterDaysRemaining = 0;
-        wasteDaysRemaining = 0;
         highNitrateDays = 0;
         algaeMemory = 0f;
         bloomFlash = 0f;
+        previousTurnAlgaeCount = settings.StartAlgae;
+        lastRandomEventSummary = "No random event yet.";
         latestMilestone = "No milestones yet.";
         jarName = "Jar-" + UnityEngine.Random.Range(10, 99);
         ClearOrganisms();
@@ -784,36 +875,170 @@ public class EcosystemController : MonoBehaviour
         PrepareDay();
     }
 
+    private DifficultySettings GetDifficultySettings()
+    {
+        if (difficulty == DifficultyMode.Easy)
+        {
+            return new DifficultySettings
+            {
+                StartFish = 4,
+                StartSnails = 3,
+                StartAlgae = 6,
+                StartNitrates = 10f,
+                StartLight = 45f,
+                StartRerolls = 5,
+                StableDaysToWin = 4,
+                BaseAlgaeGrowth = 0.6f,
+                LightGrowthPerPointAbove50 = 0.010f,
+                NitrateGrowthPerPoint = 0.008f,
+                MemoryBleed = 0.15f,
+                AlgaeSoftCapStart = 12,
+                AlgaeSoftCapMultiplier = 0.5f,
+                NitrateWarning = 70f,
+                NitrateCollapse = 90f,
+                AlgaeWarning = 14,
+                AlgaeCollapse = 20,
+                StableNitrateMax = 60f,
+                StableAlgaeMin = 1,
+                StableAlgaeMax = 11,
+                StableFishMin = 1,
+                StableSnailMin = 1,
+                FishWastePerTurn = 1.0f,
+                FishHungryGraze = 1,
+                FishStarveTurns = 3,
+                FishStarveLoseOne = true,
+                FishReproductionChancePerFish = 0.20f,
+                FishReproductionMinAlgae = 3,
+                SnailAlgaeEat = 1,
+                SnailStarveThreshold = 1,
+                SnailStarveTurns = 3,
+                SnailStarveLoseOne = true,
+                SnailReproductionChance = 0.15f,
+                SnailReproductionMinAlgae = 6,
+                PassiveNitrateDecay = 0.8f,
+                FeedFishNitrateMultiplier = 1.2f,
+                BloomFeedbackNitrates = 1.5f,
+                UncommonUnlockRoll = 2,
+                RareUnlockRoll = 4
+            };
+        }
+
+        if (difficulty == DifficultyMode.Hard)
+        {
+            return new DifficultySettings
+            {
+                StartFish = 3,
+                StartSnails = 2,
+                StartAlgae = 7,
+                StartNitrates = 35f,
+                StartLight = 60f,
+                StartRerolls = 1,
+                StableDaysToWin = 7,
+                BaseAlgaeGrowth = 1.1f,
+                LightGrowthPerPointAbove50 = 0.020f,
+                NitrateGrowthPerPoint = 0.016f,
+                MemoryBleed = 0.35f,
+                AlgaeSoftCapStart = 8,
+                AlgaeSoftCapMultiplier = 0.4f,
+                NitrateWarning = 55f,
+                NitrateCollapse = 75f,
+                AlgaeWarning = 10,
+                AlgaeCollapse = 15,
+                StableNitrateMax = 45f,
+                StableAlgaeMin = 3,
+                StableAlgaeMax = 7,
+                StableFishMin = 2,
+                StableSnailMin = 1,
+                FishWastePerTurn = 1.5f,
+                FishHungryGraze = 2,
+                FishStarveTurns = 2,
+                FishStarveLoseOne = false,
+                FishReproductionChancePerFish = 0.08f,
+                FishReproductionMinAlgae = 6,
+                SnailAlgaeEat = 1,
+                SnailStarveThreshold = 3,
+                SnailStarveTurns = 1,
+                SnailStarveLoseOne = false,
+                SnailReproductionChance = 0.07f,
+                SnailReproductionMinAlgae = 9,
+                PassiveNitrateDecay = 0.3f,
+                FeedFishNitrateMultiplier = 1.8f,
+                BloomFeedbackNitrates = 4.0f,
+                UncommonUnlockRoll = 4,
+                RareUnlockRoll = 6
+            };
+        }
+
+        return new DifficultySettings
+        {
+            StartFish = 3,
+            StartSnails = 2,
+            StartAlgae = 5,
+            StartNitrates = 20f,
+            StartLight = 50f,
+            StartRerolls = 3,
+            StableDaysToWin = 5,
+            BaseAlgaeGrowth = 0.8f,
+            LightGrowthPerPointAbove50 = 0.015f,
+            NitrateGrowthPerPoint = 0.012f,
+            MemoryBleed = 0.25f,
+            AlgaeSoftCapStart = 10,
+            AlgaeSoftCapMultiplier = 0.4f,
+            NitrateWarning = 65f,
+            NitrateCollapse = 85f,
+            AlgaeWarning = 12,
+            AlgaeCollapse = 18,
+            StableNitrateMax = 55f,
+            StableAlgaeMin = 2,
+            StableAlgaeMax = 10,
+            StableFishMin = 1,
+            StableSnailMin = 1,
+            FishWastePerTurn = 1.2f,
+            FishHungryGraze = 1,
+            FishStarveTurns = 2,
+            FishStarveLoseOne = false,
+            FishReproductionChancePerFish = 0.15f,
+            FishReproductionMinAlgae = 4,
+            SnailAlgaeEat = 1,
+            SnailStarveThreshold = 2,
+            SnailStarveTurns = 2,
+            SnailStarveLoseOne = false,
+            SnailReproductionChance = 0.12f,
+            SnailReproductionMinAlgae = 7,
+            PassiveNitrateDecay = 0.5f,
+            FeedFishNitrateMultiplier = 1.5f,
+            BloomFeedbackNitrates = 2.5f,
+            UncommonUnlockRoll = 3,
+            RareUnlockRoll = 5
+        };
+    }
+
     private void BuildDeckTemplate()
     {
         deckTemplate.Clear();
-        AddCard("Feed Fish", "Fish are fully fed today.\nSmall nitrate increase.", CardCategory.Fish, new Color(0.58f, 0.83f, 0.95f), false, t => { t.FeedBonus += 1.4f; t.NitrateBonus += 1.2f; t.Notes.Add("Feed Fish kept the fish satisfied."); });
-        AddCard("Underfeed Fish", "Fish eat algae today.\nRepeated use is risky.", CardCategory.Fish, new Color(0.63f, 0.8f, 0.92f), false, t => { t.FeedBonus -= 0.9f; t.ExtraFishGraze += 2; t.FishHealthBonus -= 0.06f; t.Notes.Add("Underfeeding pushed fish to graze algae."); });
-        AddCard("Overfeed Fish", "Fish health improves.\nHuge nitrate increase.", CardCategory.Risk, new Color(0.97f, 0.66f, 0.43f), true, t => { t.FeedBonus += 2.2f; t.NitrateBonus += 3.6f; t.FishHealthBonus += 0.14f; t.Notes.Add("Overfeeding created a heavy nitrate spike."); });
-        AddCard("Add Fish", "Add 1 fish.\nRaises long-term nitrates.", CardCategory.Fish, new Color(0.54f, 0.75f, 0.94f), false, t => { t.AddFish += 1; });
-        AddCard("Remove Fish", "Remove 1 fish.\nLowers waste output.", CardCategory.Fish, new Color(0.72f, 0.83f, 0.96f), false, t => { t.RemoveFish += 1; });
-        AddCard("Add Snail", "Add 1 snail.", CardCategory.Snail, new Color(0.93f, 0.79f, 0.49f), false, t => { t.AddSnail += 1; });
-        AddCard("Snail Eggs", "Add 2 snails.", CardCategory.Snail, new Color(0.95f, 0.83f, 0.54f), false, t => { t.AddSnail += 2; });
-        AddCard("Snail Loss", "Remove 1 snail.", CardCategory.Snail, new Color(0.84f, 0.68f, 0.45f), false, t => { t.RemoveSnail += 1; });
-        AddCard("Remove Algae", "Remove 20 algae.", CardCategory.Algae, new Color(0.54f, 0.82f, 0.46f), false, t => { t.AlgaeBonus -= 20; });
-        AddCard("Algae Growth", "Increase algae moderately.", CardCategory.Algae, new Color(0.61f, 0.83f, 0.51f), false, t => { t.AlgaeBonus += 3; });
-        AddCard("Algae Surge", "Large algae increase.", CardCategory.Risk, new Color(0.41f, 0.76f, 0.33f), true, t => { t.AlgaeBonus += 6; t.LightBonus += 1; });
-        AddCard("Algae Die-Off", "Large algae decrease.", CardCategory.Algae, new Color(0.72f, 0.89f, 0.66f), false, t => { t.AlgaeBonus -= 5; });
-        AddCard("Balanced Growth", "Algae grows slowly and safely.", CardCategory.Algae, new Color(0.7f, 0.88f, 0.62f), false, t => { t.AlgaeBonus += 1; t.NitrateBonus -= 0.6f; });
-        AddCard("Increase Light", "Boost algae growth.", CardCategory.Light, new Color(0.98f, 0.89f, 0.55f), false, t => { t.LightBonus += 1; });
-        AddCard("Dim Light", "Reduce algae growth.", CardCategory.Light, new Color(0.8f, 0.83f, 0.65f), false, t => { t.LightBonus -= 1; });
-        AddCard("Sunny Day", "Strong algae growth this turn.", CardCategory.Light, new Color(0.99f, 0.83f, 0.39f), false, t => { t.LightBonus += 2; t.AlgaeBonus += 2; });
-        AddCard("Cloudy Day", "Algae growth is reduced this turn.", CardCategory.Light, new Color(0.77f, 0.81f, 0.83f), false, t => { t.LightBonus -= 2; });
-        AddCard("Clean Water", "Reduce nitrates significantly.", CardCategory.Water, new Color(0.66f, 0.92f, 0.95f), false, t => { t.NitrateBonus -= 4.5f; });
-        AddCard("Partial Water Change", "Reduce nitrates and algae slightly.", CardCategory.Water, new Color(0.72f, 0.94f, 0.93f), false, t => { t.NitrateBonus -= 2.3f; t.AlgaeBonus -= 2; });
-        AddCard("Nutrient Spike", "Increase nitrates significantly.", CardCategory.Risk, new Color(0.93f, 0.6f, 0.44f), true, t => { t.NitrateBonus += 4.5f; });
-        AddCard("Filter System", "Reduce nitrates for the next 2 days.", CardCategory.Water, new Color(0.62f, 0.88f, 0.88f), false, t => { t.FilterDays = Mathf.Max(t.FilterDays, 2); });
-        AddCard("Waste Build-Up", "Nitrates rise slowly for 2 days.", CardCategory.Risk, new Color(0.88f, 0.62f, 0.5f), true, t => { t.WasteDays = Mathf.Max(t.WasteDays, 2); });
+        cardLibrary.Clear();
+        AddCard("Feed Fish", "Reset hunger. Feeding adds nitrate pressure this turn.", CardCategory.Fish, CardTier.Common, new Color(0.58f, 0.83f, 0.95f), false, t => { t.FeedFishPlayed = true; t.Notes.Add("Feed Fish reset fish hunger."); });
+        AddCard("Big Feed", "A strong feed. Powerful, but nitrate-heavy.", CardCategory.Risk, CardTier.Rare, new Color(0.97f, 0.66f, 0.43f), true, t => { t.FeedFishPlayed = true; t.FeedWasteMultiplier = 3f; t.Notes.Add("Big Feed pushed nitrate output hard."); });
+        AddCard("Add Fish", "Add 1 fish.", CardCategory.Fish, CardTier.Uncommon, new Color(0.54f, 0.75f, 0.94f), false, t => { t.AddFish += 1; });
+        AddCard("Remove Fish", "Remove 1 fish.", CardCategory.Fish, CardTier.Uncommon, new Color(0.72f, 0.83f, 0.96f), false, t => { t.RemoveFish += 1; });
+        AddCard("Add Snail", "Add 1 snail.", CardCategory.Snail, CardTier.Common, new Color(0.93f, 0.79f, 0.49f), false, t => { t.AddSnail += 1; });
+        AddCard("Trim Algae", "Remove 2 algae.", CardCategory.Algae, CardTier.Common, new Color(0.54f, 0.82f, 0.46f), false, t => { t.AlgaeBonus -= 2; });
+        AddCard("Algae Bloom", "Add 3 algae.", CardCategory.Algae, CardTier.Uncommon, new Color(0.61f, 0.83f, 0.51f), false, t => { t.AlgaeBonus += 3; });
+        AddCard("Algae Purge", "Remove 5 algae, but 1 snail dies too.", CardCategory.Risk, CardTier.Rare, new Color(0.41f, 0.76f, 0.33f), true, t => { t.AlgaeBonus -= 5; t.RemoveSnail += 1; });
+        AddCard("Dim Light", "Lower light by 10.", CardCategory.Light, CardTier.Common, new Color(0.8f, 0.83f, 0.65f), false, t => { t.LightDelta -= 10f; });
+        AddCard("Boost Light", "Raise light by 10.", CardCategory.Light, CardTier.Uncommon, new Color(0.98f, 0.89f, 0.55f), false, t => { t.LightDelta += 10f; });
+        AddCard("Water Change", "Reduce nitrates by 16.", CardCategory.Water, CardTier.Common, new Color(0.66f, 0.92f, 0.95f), false, t => { t.NitrateBonus -= 16f; });
+        AddCard("Big Water Change", "Reduce nitrates by 32.", CardCategory.Water, CardTier.Uncommon, new Color(0.72f, 0.94f, 0.93f), false, t => { t.NitrateBonus -= 32f; });
+        AddCard("Deep Clean", "Reduce nitrates by 64.", CardCategory.Water, CardTier.Rare, new Color(0.62f, 0.88f, 0.88f), false, t => { t.NitrateBonus -= 64f; });
+        AddCard("Fertilise", "Add 2 algae and 24 nitrates.", CardCategory.Risk, CardTier.Rare, new Color(0.88f, 0.62f, 0.5f), true, t => { t.AlgaeBonus += 2; t.NitrateBonus += 24f; });
+        AddCard("Random Event", "Roll a jar event.", CardCategory.Risk, CardTier.Common, new Color(0.77f, 0.81f, 0.83f), false, t => { t.TriggerRandomEvent = true; });
     }
 
-    private void AddCard(string name, string summary, CardCategory category, Color color, bool risk, Action<TurnState> apply)
+    private void AddCard(string name, string summary, CardCategory category, CardTier tier, Color color, bool risk, Action<TurnState> apply)
     {
-        deckTemplate.Add(new CardDef { Name = name, Summary = summary, Category = category, Color = color, Risk = risk, Apply = apply });
+        CardDef card = new CardDef { Name = name, Summary = summary, Category = category, Tier = tier, Color = color, Risk = risk, Apply = apply };
+        deckTemplate.Add(card);
+        cardLibrary[name] = card;
     }
 
     private void BuildDeck()
@@ -822,23 +1047,59 @@ public class EcosystemController : MonoBehaviour
         discardPile.Clear();
         hand.Clear();
         selected.Clear();
-        foreach (CardDef card in deckTemplate) drawPile.Add(card);
+        AddCopiesToDeck("Feed Fish", difficulty == DifficultyMode.Easy ? 4 : difficulty == DifficultyMode.Hard ? 2 : 3);
+        AddCopiesToDeck("Water Change", difficulty == DifficultyMode.Easy ? 3 : difficulty == DifficultyMode.Hard ? 2 : 2);
+        AddCopiesToDeck("Big Water Change", difficulty == DifficultyMode.Easy ? 2 : 1);
+        AddCopiesToDeck("Deep Clean", difficulty == DifficultyMode.Easy ? 2 : difficulty == DifficultyMode.Medium ? 1 : 0);
+        AddCopiesToDeck("Random Event", difficulty == DifficultyMode.Easy ? 1 : difficulty == DifficultyMode.Medium ? 2 : 3);
+        AddCopiesToDeck("Trim Algae", difficulty == DifficultyMode.Easy ? 3 : difficulty == DifficultyMode.Hard ? 2 : 2);
+        AddCopiesToDeck("Algae Purge", 1);
+        AddCopiesToDeck("Big Feed", difficulty == DifficultyMode.Hard ? 2 : 1);
+        AddCopiesToDeck("Fertilise", difficulty == DifficultyMode.Hard ? 2 : 1);
+        AddCopiesToDeck("Add Fish", difficulty == DifficultyMode.Hard ? 1 : 2);
+        AddCopiesToDeck("Remove Fish", difficulty == DifficultyMode.Hard ? 1 : 2);
+        AddCopiesToDeck("Add Snail", difficulty == DifficultyMode.Hard ? 1 : 2);
+        AddCopiesToDeck("Dim Light", difficulty == DifficultyMode.Hard ? 1 : 2);
+        AddCopiesToDeck("Boost Light", difficulty == DifficultyMode.Easy ? 2 : 1);
+        AddCopiesToDeck("Algae Bloom", 1);
         Shuffle(drawPile);
+    }
+
+    private void AddCopiesToDeck(string cardName, int copies)
+    {
+        if (copies <= 0 || !cardLibrary.ContainsKey(cardName)) return;
+        for (int i = 0; i < copies; i++) drawPile.Add(cardLibrary[cardName]);
     }
 
     private void PrepareDay()
     {
         selected.Clear();
         DrawToFullHand();
-        currentEvent = RollEvent();
+        RollDie();
+        EnsurePlayableHandAfterRoll();
         SetupDayPresentation();
+    }
+
+    private void RollDie()
+    {
+        currentDieRoll = UnityEngine.Random.Range(1, 7);
+    }
+
+    private void RerollDie()
+    {
+        if (state != GameState.Playing || isResolvingCard || isPaused || rerollTokens <= 0) return;
+        rerollTokens--;
+        RollDie();
+        EnsurePlayableHandAfterRoll();
+        latestWarnings = "You spent a re-roll token.";
+        RefreshHud();
     }
 
     private void SetupDayPresentation()
     {
-        latestWarnings = "Choose 1 card to shape the jar.";
-        dayReport = jarName + "\nDay " + day + "\nPlan carefully before resolving the ecosystem.";
-        if (bannerText != null) bannerText.text = jarName + "  Day " + day + " - Play 1 card, then draw 1.";
+        latestWarnings = "Roll unlocks which cards can be played this turn.";
+        dayReport = jarName + "\nDay " + day + "\nPlan around your die roll and remaining re-rolls.";
+        if (bannerText != null) bannerText.text = jarName + "  Day " + day + " - Roll " + currentDieRoll + " - Play 1 card.";
         RefreshHud();
     }
 
@@ -860,23 +1121,149 @@ public class EcosystemController : MonoBehaviour
         }
     }
 
-    private EventDef RollEvent()
+    private void EnsurePlayableHandAfterRoll()
     {
-        int roll = UnityEngine.Random.Range(0, 100);
-        if (roll < 18) return new EventDef { Name = "Snail Eggs", Summary = "+2 snails appear automatically.", Apply = t => { t.AddSnail += 2; t.Notes.Add("Random event: snail eggs hatched."); } };
-        if (roll < 34) return new EventDef { Name = "Fish Disease", Summary = "Fish eat less this turn.", Apply = t => { t.AppetiteMultiplier *= 0.75f; t.FishHealthBonus -= 0.04f; t.Notes.Add("Random event: fish disease reduced appetite."); } };
-        if (roll < 50) return new EventDef { Name = "Nutrient Spike", Summary = "Nitrates rise by 15.", Apply = t => { t.NitrateBonus += 15f; t.Notes.Add("Random event: a nutrient spike hit the jar."); } };
-        if (roll < 62) return new EventDef { Name = "Cloudy Weather", Summary = "Light drops this turn.", Apply = t => { t.LightBonus -= 1; } };
-        return new EventDef { Name = "Calm Day", Summary = "No random event today.", Apply = t => { } };
+        if (hand.Count == 0 || hand.Exists(IsCardPlayable))
+        {
+            return;
+        }
+
+        CardDef guaranteed = DrawGuaranteedPlayableCard();
+        if (guaranteed == null)
+        {
+            return;
+        }
+
+        int replaceIndex = GetHighestRequirementCardIndex();
+        if (replaceIndex < 0 || replaceIndex >= hand.Count)
+        {
+            replaceIndex = hand.Count - 1;
+        }
+
+        discardPile.Add(hand[replaceIndex]);
+        hand[replaceIndex] = guaranteed;
+        latestWarnings = "One card was swapped so you always have at least 1 playable option.";
+    }
+
+    private CardDef DrawGuaranteedPlayableCard()
+    {
+        int drawIndex = FindPlayableCardIndex(drawPile);
+        if (drawIndex >= 0)
+        {
+            return RemoveCardAt(drawPile, drawIndex);
+        }
+
+        if (discardPile.Count > 0)
+        {
+            drawPile.AddRange(discardPile);
+            discardPile.Clear();
+            Shuffle(drawPile);
+            drawIndex = FindPlayableCardIndex(drawPile);
+            if (drawIndex >= 0)
+            {
+                return RemoveCardAt(drawPile, drawIndex);
+            }
+        }
+
+        List<CardDef> fallbackCards = new List<CardDef>();
+        for (int i = 0; i < deckTemplate.Count; i++)
+        {
+            if (GetRequiredRoll(deckTemplate[i]) <= currentDieRoll)
+            {
+                fallbackCards.Add(deckTemplate[i]);
+            }
+        }
+
+        if (fallbackCards.Count == 0)
+        {
+            return null;
+        }
+
+        return fallbackCards[UnityEngine.Random.Range(0, fallbackCards.Count)];
+    }
+
+    private int FindPlayableCardIndex(List<CardDef> source)
+    {
+        for (int i = source.Count - 1; i >= 0; i--)
+        {
+            if (IsCardPlayable(source[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private CardDef RemoveCardAt(List<CardDef> source, int index)
+    {
+        CardDef card = source[index];
+        source.RemoveAt(index);
+        return card;
+    }
+
+    private int GetHighestRequirementCardIndex()
+    {
+        int bestIndex = -1;
+        int highestRequirement = int.MinValue;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            int requirement = GetRequiredRoll(hand[i]);
+            if (requirement > highestRequirement)
+            {
+                highestRequirement = requirement;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private void ResolveRandomEvent(TurnState turn)
+    {
+        int roll = UnityEngine.Random.Range(1, 7);
+        if (roll == 1) { turn.LightDelta += 20f; lastRandomEventSummary = "Heatwave: +20 light."; }
+        else if (roll == 2) { turn.LightDelta -= 20f; lastRandomEventSummary = "Overcast: -20 light."; }
+        else if (roll == 3) { turn.NitrateBonus += 10f; lastRandomEventSummary = "Overfeeding remnant: +10 nitrates."; }
+        else if (roll == 4) { turn.AddSnail += 1; lastRandomEventSummary = "Surprise snail: +1 snail."; }
+        else if (roll == 5) { turn.AlgaeBonus -= 2; lastRandomEventSummary = "Snail feast overnight: -2 algae."; }
+        else { turn.RemoveFish += 1; lastRandomEventSummary = "One fish didn't make it: -1 fish."; }
+        turn.Notes.Add("Random Event: " + lastRandomEventSummary);
     }
 
     private void ToggleCard(int index)
     {
         if (index < 0 || index >= hand.Count || state != GameState.Playing) return;
         CardDef card = hand[index];
+        if (!IsCardPlayable(card))
+        {
+            latestWarnings = card.Name + " is locked by the current die roll.";
+            RefreshHud();
+            return;
+        }
         if (selected.Contains(card)) selected.Remove(card);
         else if (selected.Count < 1) selected.Add(card);
         RefreshHud();
+    }
+
+    private bool IsCardPlayable(CardDef card)
+    {
+        return currentDieRoll >= GetRequiredRoll(card);
+    }
+
+    private int GetRequiredRoll(CardDef card)
+    {
+        DifficultySettings settings = GetDifficultySettings();
+        if (card.Tier == CardTier.Common) return 1;
+        if (card.Tier == CardTier.Uncommon) return settings.UncommonUnlockRoll;
+        return settings.RareUnlockRoll;
+    }
+
+    private static string GetTierRoman(CardTier tier)
+    {
+        if (tier == CardTier.Common) return "I";
+        if (tier == CardTier.Uncommon) return "II";
+        return "III";
     }
 
     private void TickDay()
@@ -908,22 +1295,24 @@ public class EcosystemController : MonoBehaviour
         }
 
         TurnState turn = new TurnState();
-        currentEvent.Apply(turn);
         playedCard.Apply(turn);
+        if (turn.TriggerRandomEvent)
+        {
+            ResolveRandomEvent(turn);
+        }
 
         RemoveSpecies(SpeciesType.Fish, turn.RemoveFish);
         RemoveSpecies(SpeciesType.Snail, turn.RemoveSnail);
         AddSpecies(SpeciesType.Fish, turn.AddFish);
         AddSpecies(SpeciesType.Snail, turn.AddSnail);
         ApplyAlgaeChange(turn.AlgaeBonus);
-        if (turn.FilterDays > 0) filterDaysRemaining = Mathf.Max(filterDaysRemaining, turn.FilterDays);
-        if (turn.WasteDays > 0) wasteDaysRemaining = Mathf.Max(wasteDaysRemaining, turn.WasteDays);
 
         ResolveSimulation(turn);
         hand.Remove(playedCard);
         discardPile.Add(playedCard);
         selected.Clear();
         hoveredCardIndex = -1;
+        currentDieRoll = 0;
         RefreshHud();
         if (state != GameState.Playing)
         {
@@ -934,7 +1323,8 @@ public class EcosystemController : MonoBehaviour
         day++;
         int handCountBeforeDraw = hand.Count;
         DrawToFullHand();
-        currentEvent = RollEvent();
+        RollDie();
+        EnsurePlayableHandAfterRoll();
         SetupDayPresentation();
         if (hand.Count > handCountBeforeDraw)
         {
@@ -947,91 +1337,142 @@ public class EcosystemController : MonoBehaviour
 
     private void ResolveSimulation(TurnState turn)
     {
-        int algae = CountSpecies(SpeciesType.Algae);
-        int snails = CountSpecies(SpeciesType.Snail);
-        int fish = CountSpecies(SpeciesType.Fish);
-        float algaeFactor = difficulty == DifficultyMode.Easy ? 0.86f : difficulty == DifficultyMode.Hard ? 1.18f : 1f;
-        float nitrateFactor = difficulty == DifficultyMode.Easy ? 0.88f : difficulty == DifficultyMode.Hard ? 1.18f : 1f;
-        float bloomBonus = difficulty == DifficultyMode.Easy ? 2f : difficulty == DifficultyMode.Hard ? -2f : 0f;
-        float tempAlgaeFactor = temperatureLevel == 0 ? 0.84f : temperatureLevel == 2 ? 1.18f : 1f;
-        float tempFishStress = temperatureLevel == 2 ? -0.08f : temperatureLevel == 0 ? -0.02f : 0f;
-        int effectiveLight = Mathf.Clamp(3 + turn.LightBonus, 0, 5);
-        float feedProvided = Mathf.Max(0f, 3f + turn.FeedBonus);
-        float fishIntake;
-        float fishDemand = TotalFishDemand(turn.AppetiteMultiplier);
-        int fishGraze = Mathf.Min(algae, Mathf.Max(0, Mathf.RoundToInt(TotalFishGrazePotential(feedProvided) + turn.ExtraFishGraze)));
-        int snailGraze = Mathf.Min(Mathf.Max(0, algae - fishGraze), Mathf.RoundToInt(snails * 0.7f));
-        int algaeGrowth = Mathf.Clamp(Mathf.RoundToInt((((effectiveLight * 0.8f) + (nitrateLevel * 0.17f) + Mathf.Min(algae * 0.08f, 1.6f) + algaeMemory) * algaeFactor) * tempAlgaeFactor), 0, 6);
-        int algaeDelta = Mathf.Clamp(algaeGrowth - Mathf.Min(algae, fishGraze + snailGraze + (effectiveLight == 0 ? 1 : 0)), -4, 6);
-        nitrateLevel += ((fish * (0.5f + (feedProvided * 0.18f))) + (snails * 0.05f)) * nitrateFactor;
-        nitrateLevel += turn.NitrateBonus;
-        nitrateLevel -= Mathf.Min(nitrateLevel, (algae + Mathf.Max(0, algaeDelta)) * 0.14f);
-        if (filterDaysRemaining > 0) { nitrateLevel = Mathf.Max(0f, nitrateLevel - 2.4f); filterDaysRemaining--; }
-        if (wasteDaysRemaining > 0) { nitrateLevel += 1.8f; wasteDaysRemaining--; }
-        nitrateLevel = Mathf.Clamp(nitrateLevel, 0f, 30f);
-        ApplyAlgaeChange(algaeDelta);
+        DifficultySettings settings = GetDifficultySettings();
+        lightLevel = Mathf.Clamp(lightLevel + turn.LightDelta, 0f, 100f);
 
-        algae = CountSpecies(SpeciesType.Algae);
+        int startAlgae = CountSpecies(SpeciesType.Algae);
+        int fish = CountSpecies(SpeciesType.Fish);
+        int snails = CountSpecies(SpeciesType.Snail);
+
+        float growth = settings.BaseAlgaeGrowth + Mathf.Max(0f, lightLevel - 50f) * settings.LightGrowthPerPointAbove50 + (nitrateLevel * settings.NitrateGrowthPerPoint) + (previousTurnAlgaeCount * settings.MemoryBleed);
+        if (startAlgae >= settings.AlgaeSoftCapStart)
+        {
+            growth *= settings.AlgaeSoftCapMultiplier;
+        }
+
+        int algaeGrowth = Mathf.Max(0, Mathf.RoundToInt(growth));
+        if (algaeGrowth > 0)
+        {
+            ApplyAlgaeChange(algaeGrowth);
+        }
+
+        bool fedFish = turn.FeedFishPlayed;
+        if (fedFish) fishHungryTurns = 0;
+        else fishHungryTurns++;
+
+        int fishGraze = 0;
+        if (!fedFish && fish > 0)
+        {
+            fishGraze = Mathf.Min(CountSpecies(SpeciesType.Algae), fish * settings.FishHungryGraze);
+            if (fishGraze > 0) ApplyAlgaeChange(-fishGraze);
+        }
+
+        int snailGraze = Mathf.Min(CountSpecies(SpeciesType.Algae), CountSpecies(SpeciesType.Snail) * settings.SnailAlgaeEat);
+        if (snailGraze > 0)
+        {
+            ApplyAlgaeChange(-snailGraze);
+        }
+
+        int algaeAfterGraze = CountSpecies(SpeciesType.Algae);
+        if (fishHungryTurns >= settings.FishStarveTurns && CountSpecies(SpeciesType.Fish) > 0)
+        {
+            int fishLoss = settings.FishStarveLoseOne ? 1 : Mathf.CeilToInt(CountSpecies(SpeciesType.Fish) * 0.5f);
+            RemoveSpecies(SpeciesType.Fish, fishLoss);
+            fishHungryTurns = 0;
+            turn.Notes.Add("Fish starvation caused a loss.");
+        }
+
+        if (algaeAfterGraze <= settings.SnailStarveThreshold) snailStarvingTurns++;
+        else snailStarvingTurns = 0;
+
+        if (snailStarvingTurns >= settings.SnailStarveTurns && CountSpecies(SpeciesType.Snail) > 0)
+        {
+            int snailLoss = settings.SnailStarveLoseOne ? 1 : Mathf.CeilToInt(CountSpecies(SpeciesType.Snail) * 0.5f);
+            RemoveSpecies(SpeciesType.Snail, snailLoss);
+            snailStarvingTurns = 0;
+            turn.Notes.Add("Snail starvation caused a loss.");
+        }
+
         fish = CountSpecies(SpeciesType.Fish);
         snails = CountSpecies(SpeciesType.Snail);
-        bloomThreshold = 14f + (snails * 1.4f) + bloomBonus;
-        fishIntake = fish > 0 ? (feedProvided + (fishGraze * 0.8f)) / fish : 0f;
-        float snailFood = snails > 0 ? (snailGraze + Mathf.Max(0, algae - 2) * 0.08f) / snails : 0f;
-        AdjustFishHealth((fishIntake >= 1.05f ? 0.07f : -0.2f) + tempFishStress + turn.FishHealthBonus);
-        AdjustSpeciesHealth(SpeciesType.Snail, algae < 2 || snailFood < 0.45f ? -0.18f : (snails > Mathf.Max(4, algae / 2) ? -0.06f : 0.06f));
-        AdjustSpeciesHealth(SpeciesType.Algae, effectiveLight == 0 || nitrateLevel < 1f ? -0.14f : 0.04f);
-        ReproduceFish(fishIntake);
-        ReproduceSnails(algae, snails);
-        CleanupDead();
-        UpdateEcosystemMemory();
-        UpdateMilestones();
-        bool bloom = CountSpecies(SpeciesType.Algae) >= bloomThreshold;
-        if (bloom) { bloomFlash = 1.5f; AdjustFishHealth(-0.45f); CleanupDead(); }
+        int algae = CountSpecies(SpeciesType.Algae);
+
+        nitrateLevel -= settings.PassiveNitrateDecay;
+        nitrateLevel += fish * settings.FishWastePerTurn;
+        if (fedFish && fish > 0)
+        {
+            nitrateLevel += fish * settings.FishWastePerTurn * settings.FeedFishNitrateMultiplier * turn.FeedWasteMultiplier;
+        }
+        nitrateLevel += turn.NitrateBonus;
+        if (algae >= settings.AlgaeWarning)
+        {
+            nitrateLevel += settings.BloomFeedbackNitrates;
+        }
+        nitrateLevel = Mathf.Clamp(nitrateLevel, 0f, 100f);
+
+        if (fedFish && algae >= settings.FishReproductionMinAlgae && fish > 0 && UnityEngine.Random.value < Mathf.Clamp01(fish * settings.FishReproductionChancePerFish))
+        {
+            AddSpecies(SpeciesType.Fish, 1);
+            turn.Notes.Add("A fed fish reproduced.");
+        }
+
+        if (algae >= settings.SnailReproductionMinAlgae && snails > 0 && UnityEngine.Random.value < settings.SnailReproductionChance)
+        {
+            AddSpecies(SpeciesType.Snail, 1);
+            turn.Notes.Add("Snails reproduced.");
+        }
 
         int finalAlgae = CountSpecies(SpeciesType.Algae);
         int finalSnails = CountSpecies(SpeciesType.Snail);
         int finalFish = CountSpecies(SpeciesType.Fish);
-        latestWarnings = BuildWarnings(finalAlgae, finalSnails, finalFish, bloom);
-        bool stable = finalFish > 0 && finalSnails > 0 && finalAlgae > 0 && nitrateLevel <= 10f && finalAlgae < bloomThreshold - 2f;
-        stableDays = stable ? stableDays + 1 : 0;
-        perfectDays = stable && string.IsNullOrEmpty(latestWarnings) ? perfectDays + 1 : 0;
-        stability = Mathf.Clamp((finalFish * 14f) + (finalSnails * 10f) + (finalAlgae * 4f) - (nitrateLevel * 3.2f) - (bloom ? 18f : 0f), 0f, 100f);
-        dayReport = BuildReport(turn, fishIntake, fishGraze, snailGraze, algaeGrowth, fishDemand);
+        bloomThreshold = settings.AlgaeWarning;
+        previousTurnAlgaeCount = finalAlgae;
+        algaeMemory = previousTurnAlgaeCount * settings.MemoryBleed;
 
-        if (stableDays >= 12) { EndGame(true, "You stabilized the jar for 12 straight days."); return; }
+        bool bloomWarning = finalAlgae >= settings.AlgaeWarning;
+        latestWarnings = BuildWarnings(finalAlgae, finalSnails, finalFish, bloomWarning);
+        bool stable = nitrateLevel < settings.StableNitrateMax
+            && finalAlgae >= settings.StableAlgaeMin
+            && finalAlgae <= settings.StableAlgaeMax
+            && finalFish >= settings.StableFishMin
+            && finalSnails >= settings.StableSnailMin;
+        stableDays = stable ? stableDays + 1 : 0;
+        perfectDays = stable ? perfectDays + 1 : 0;
+        stability = Mathf.Clamp(100f - Mathf.Abs(((settings.StableAlgaeMin + settings.StableAlgaeMax) * 0.5f) - finalAlgae) * 8f - Mathf.Max(0f, nitrateLevel - settings.StableNitrateMax) * 1.3f, 0f, 100f);
+        dayReport = BuildReport(turn, fedFish, fishGraze, snailGraze, algaeGrowth);
+
+        if (stableDays >= settings.StableDaysToWin) { EndGame(true, "You stabilized the jar for " + settings.StableDaysToWin + " straight days."); return; }
         if (finalFish <= 0) { EndGame(false, "The fish died out and the jar collapsed."); return; }
-        if (finalSnails <= 0) { EndGame(false, "The snails died out and algae control failed."); return; }
         if (finalAlgae <= 0) { EndGame(false, "The algae collapsed and the food web failed."); return; }
-        if (nitrateLevel >= 24f) { EndGame(false, "Nitrates overwhelmed the jar."); return; }
+        if (nitrateLevel >= settings.NitrateCollapse) { EndGame(false, "Nitrates overwhelmed the jar."); return; }
+        if (finalAlgae >= settings.AlgaeCollapse) { EndGame(false, "An algae bloom overwhelmed the jar."); return; }
         RefreshHud();
     }
 
     private string BuildWarnings(int algae, int snails, int fish, bool bloom)
     {
+        DifficultySettings settings = GetDifficultySettings();
         List<string> warnings = new List<string>();
-        if (bloom) warnings.Add("Algae bloom risk is active.");
-        if (nitrateLevel >= 10f) warnings.Add("High nitrates are stressing the ecosystem.");
-        if (fish > 0 && AverageFishHealth() < 0.4f) warnings.Add("Fish are weakened.");
-        if (snails > 0 && algae < snails) warnings.Add("Snails may starve if algae stays low.");
-        if (filterDaysRemaining > 0) warnings.Add("Filter System is still active.");
-        if (wasteDaysRemaining > 0) warnings.Add("Waste Build-Up is still active.");
-        if (algaeMemory > 0.15f) warnings.Add("Ecosystem memory is making algae rebound faster.");
+        if (bloom) warnings.Add("Algae bloom risk is rising.");
+        if (nitrateLevel >= settings.NitrateWarning) warnings.Add("Nitrates are in the warning zone.");
+        if (fishHungryTurns > 0) warnings.Add("Fish are going hungry.");
+        if (snails > 0 && algae <= settings.SnailStarveThreshold) warnings.Add("Snails may starve if algae stays this low.");
+        if (fish < settings.StableFishMin) warnings.Add("Fish count is below the stability target.");
         return string.Join("\n", warnings.ToArray());
     }
 
-    private string BuildReport(TurnState turn, float fishIntake, int fishGraze, int snailGraze, int algaeGrowth, float fishDemand)
+    private string BuildReport(TurnState turn, bool fedFish, int fishGraze, int snailGraze, int algaeGrowth)
     {
         StringBuilder b = new StringBuilder();
         b.AppendLine(jarName + " - Day " + day + " Report");
         b.AppendLine("You played 1 card.");
         b.AppendLine("Cause and effect:");
-        foreach (CardDef card in selected) b.AppendLine("- " + card.Name);
-        b.AppendLine(fishIntake < 1.05f ? "Fish were underfed and leaned on algae." : "Fish feeding was adequate.");
+        if (selected.Count > 0) b.AppendLine("- " + selected[0].Name);
+        b.AppendLine(fedFish ? "Fish were fed this turn." : "Fish were not fed this turn.");
         if (fishGraze > 0) b.AppendLine("Fish grazed on algae.");
         if (snailGraze > 0) b.AppendLine("Snails cleaned extra algae.");
         if (algaeGrowth > 0) b.AppendLine("Light and nitrates pushed algae growth.");
-        if (fishDemand > 0f && fishIntake < 0.85f) b.AppendLine("Fish demand was hard to satisfy this turn.");
-        if (currentEvent != null && currentEvent.Name != "Calm Day") b.AppendLine("Event: " + currentEvent.Summary);
+        if (selected.Count > 0 && selected[0].Name == "Random Event") b.AppendLine("Event: " + lastRandomEventSummary);
         for (int i = 0; i < turn.Notes.Count && i < 3; i++) b.AppendLine(turn.Notes[i]);
         if (!string.IsNullOrEmpty(latestMilestone) && latestMilestone != "No milestones yet.") b.AppendLine("Milestone: " + latestMilestone);
         if (!string.IsNullOrEmpty(latestWarnings)) b.AppendLine("Warnings: " + latestWarnings.Replace("\n", ", "));
@@ -1040,13 +1481,14 @@ public class EcosystemController : MonoBehaviour
 
     private void RefreshHud()
     {
-        if (statsText != null) statsText.text = jarName + "\nDay: " + day + "\nStable Days: " + stableDays + " / 12\nPerfect Days: " + perfectDays + " / 10\nNitrates: " + nitrateLevel.ToString("0.0") + "\nBloom Threshold: " + bloomThreshold.ToString("0.0") + "\nStability: " + stability.ToString("0") + "\nTemperature: " + TemperatureLabel();
+        DifficultySettings settings = GetDifficultySettings();
+        if (statsText != null) statsText.text = jarName + "\nDay: " + day + "\nDifficulty: " + difficulty + "\nStable Days: " + stableDays + " / " + settings.StableDaysToWin + "\nRerolls: " + rerollTokens + "\nDie Roll: " + currentDieRoll + "\nLight: " + lightLevel.ToString("0") + " / 100\nNitrates: " + nitrateLevel.ToString("0.0") + " / 100\nAlgae Warning: " + settings.AlgaeWarning + "\nStability: " + stability.ToString("0");
         if (warningText != null)
         {
             warningText.text = string.IsNullOrEmpty(latestWarnings) ? "Warnings\nStable for now." : "Warnings\n" + latestWarnings;
             warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.72f, 0.9f, 0.78f) : new Color(0.98f, 0.84f, 0.4f);
         }
-        if (eventText != null) eventText.text = currentEvent == null ? "Event\nNo event" : "Event\n" + currentEvent.Name + "\n" + currentEvent.Summary;
+        if (eventText != null) eventText.text = "Dice\nCommon: always\nUncommon: " + settings.UncommonUnlockRoll + "+\nRare: " + settings.RareUnlockRoll + "+\nLast Event: " + lastRandomEventSummary;
         if (selectedText != null) selectedText.text = BuildSelectedText();
         if (reportText != null) reportText.text = dayReport;
         if (deckText != null) deckText.text = "Draw: " + drawPile.Count + "\nDiscard: " + discardPile.Count;
@@ -1060,10 +1502,10 @@ public class EcosystemController : MonoBehaviour
 
     private string BuildSelectedText()
     {
-        if (selected.Count == 0) return "Selected Card\nPick 1 card.";
+        if (selected.Count == 0) return "Selected Card\nPick 1 unlocked card.\nRoll: " + currentDieRoll + "  Re-rolls: " + rerollTokens;
         StringBuilder b = new StringBuilder();
         b.AppendLine("Selected Card");
-        foreach (CardDef card in selected) b.AppendLine("- " + card.Name);
+        foreach (CardDef card in selected) b.AppendLine("- " + card.Name + " (" + card.Tier + ")");
         return b.ToString();
     }
 
@@ -1089,15 +1531,17 @@ public class EcosystemController : MonoBehaviour
             if (!visible) continue;
             CardDef card = hand[i];
             bool isSelected = selected.Contains(card);
-            bool canInteract = isSelected || selected.Count < 1;
+            bool unlocked = IsCardPlayable(card);
+            bool canInteract = unlocked && (isSelected || selected.Count < 1);
             if (i < cardViews.Count && cardViews[i] != null)
             {
-                cardViews[i].SetCard(card.Name, card.Summary, card.Category.ToString(), card.Risk, card.Color, GetCardArtSprite(card), GetCardFrameSprite(card), GetCardRarity(card), isSelected, canInteract);
+                string categoryText = card.Category + "  " + GetTierRoman(card.Tier) + (unlocked ? string.Empty : "  LOCKED");
+                cardViews[i].SetCard(card.Name, card.Summary, categoryText, GetRequiredRoll(card), card.Risk, card.Color, GetCardArtSprite(card), GetCardFrameSprite(card), GetCardRarity(card), isSelected, canInteract);
             }
             else
             {
                 TMP_Text label = cardButtons[i].GetComponentInChildren<TMP_Text>();
-                if (label != null) label.text = isSelected ? "Selected" : (selected.Count >= 1 ? "Pick 1 Only" : "Select");
+                if (label != null) label.text = !unlocked ? "Locked" : isSelected ? "Selected" : (selected.Count >= 1 ? "Pick 1 Only" : "Select");
                 cardButtons[i].interactable = canInteract;
             }
         }
@@ -1184,7 +1628,8 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
-        tooltipText.text = hand[index].Name + "\n" + hand[index].Summary;
+        CardDef card = hand[index];
+        tooltipText.text = card.Name + "\nTier: " + card.Tier + "  Need: " + GetRequiredRoll(card) + "+\n" + card.Summary;
         tooltipPanel.SetActive(true);
     }
 
@@ -1519,16 +1964,19 @@ public class EcosystemController : MonoBehaviour
             return RarityType.Legendary;
         }
 
-        return card.Category == CardCategory.Water || card.Category == CardCategory.Light ? RarityType.Rare : RarityType.Common;
+        if (card.Tier == CardTier.Rare) return RarityType.Rare;
+        if (card.Tier == CardTier.Uncommon) return RarityType.Rare;
+        return RarityType.Common;
     }
 
     private void ApplyStartingJar()
     {
-        if (startingJar == StartingJar.Balanced) { nitrateLevel = 5f; AddSpecies(SpeciesType.Algae, 7); AddSpecies(SpeciesType.Snail, 2); AddSpecies(SpeciesType.Fish, 2); }
-        else if (startingJar == StartingJar.HighNitrates) { nitrateLevel = 9f; AddSpecies(SpeciesType.Algae, 8); AddSpecies(SpeciesType.Snail, 2); AddSpecies(SpeciesType.Fish, 2); }
-        else if (startingJar == StartingJar.SnailHeavy) { nitrateLevel = 4f; AddSpecies(SpeciesType.Algae, 7); AddSpecies(SpeciesType.Snail, 4); AddSpecies(SpeciesType.Fish, 1); }
-        else if (startingJar == StartingJar.Overgrown) { nitrateLevel = 7f; AddSpecies(SpeciesType.Algae, 11); AddSpecies(SpeciesType.Snail, 2); AddSpecies(SpeciesType.Fish, 2); }
-        else { nitrateLevel = 3f; AddSpecies(SpeciesType.Algae, 4); AddSpecies(SpeciesType.Snail, 1); AddSpecies(SpeciesType.Fish, 2); }
+        DifficultySettings settings = GetDifficultySettings();
+        nitrateLevel = settings.StartNitrates;
+        lightLevel = settings.StartLight;
+        AddSpecies(SpeciesType.Algae, settings.StartAlgae);
+        AddSpecies(SpeciesType.Snail, settings.StartSnails);
+        AddSpecies(SpeciesType.Fish, settings.StartFish);
     }
 
     private float TotalFishDemand(float appetiteModifier)
@@ -1659,7 +2107,7 @@ public class EcosystemController : MonoBehaviour
         if (bloomFlash > 0f) { bloomFlash = Mathf.Max(0f, bloomFlash - Time.deltaTime); float pulse = 0.5f + (Mathf.Sin(Time.time * 12f) * 0.5f); target = Color.Lerp(target, new Color(0.2f, 0.85f, 0.2f, 0.85f), pulse); }
         target.a = 0.1f;
         water.color = Color.Lerp(water.color, target, Time.deltaTime * 3.5f);
-        float lightT = Mathf.InverseLerp(0f, 5f, displayedLightLevel);
+        float lightT = Mathf.InverseLerp(0f, 100f, displayedLightLevel);
         if (lightGlow != null)
         {
             Color glowColor = Color.Lerp(new Color(0.72f, 0.77f, 0.84f, 0.03f), new Color(1f, 0.97f, 0.74f, 0.16f), lightT);
@@ -1680,7 +2128,7 @@ public class EcosystemController : MonoBehaviour
     {
         float targetLightLevel = GetDisplayedLightLevel();
         displayedLightLevel = Mathf.Lerp(displayedLightLevel, targetLightLevel, Time.deltaTime * 4f);
-        float lightT = Mathf.InverseLerp(0f, 5f, displayedLightLevel);
+        float lightT = Mathf.InverseLerp(0f, 100f, displayedLightLevel);
 
         if (tableKeyLight != null)
         {
@@ -1704,21 +2152,16 @@ public class EcosystemController : MonoBehaviour
     {
         if (state != GameState.Playing)
         {
-            return 3f;
+            return 50f;
         }
 
         TurnState preview = new TurnState();
-        if (currentEvent != null)
-        {
-            currentEvent.Apply(preview);
-        }
-
         for (int i = 0; i < selected.Count; i++)
         {
             selected[i].Apply(preview);
         }
 
-        return Mathf.Clamp(3f + preview.LightBonus, 0f, 5f);
+        return Mathf.Clamp(lightLevel + preview.LightDelta, 0f, 100f);
     }
 
     private FishTrait RandomFishTrait() { int roll = UnityEngine.Random.Range(0, 4); return roll == 0 ? FishTrait.Hungry : roll == 1 ? FishTrait.Lazy : roll == 2 ? FishTrait.Fragile : FishTrait.Balanced; }
@@ -2063,8 +2506,67 @@ public class EcosystemController : MonoBehaviour
     }
 
     private static GameObject Panel(string name, Transform parent, Color color) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); Image img = go.AddComponent<Image>(); img.color = color; return go; }
-    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = Panel(text + "Button", parent, color); Button b = go.AddComponent<Button>(); ColorBlock cb = b.colors; cb.highlightedColor = Color.Lerp(color, Color.white, 0.18f); cb.pressedColor = Color.Lerp(color, Color.black, 0.12f); b.colors = cb; b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); return b; }
-    private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions alignment) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); TextMeshProUGUI t = go.AddComponent<TextMeshProUGUI>(); t.font = TmpFontUtility.GetFont(); t.fontSize = size; t.fontStyle = style; t.alignment = alignment; t.enableWordWrapping = true; t.overflowMode = TextOverflowModes.Overflow; return t; }
+    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = CreateButtonObject(text, parent, color); Button b = go.GetComponent<Button>() ?? go.AddComponent<Button>(); ColorBlock cb = b.colors; cb.highlightedColor = Color.white; cb.pressedColor = Color.white; b.colors = cb; b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); UiThemeStyler.ApplyButton(b, GetButtonKind(text), t); return b; }
+    private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions alignment) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); TextMeshProUGUI t = go.AddComponent<TextMeshProUGUI>(); t.font = TmpFontUtility.GetFont(); t.fontSize = size; t.fontStyle = style; t.alignment = alignment; t.textWrappingMode = TextWrappingModes.Normal; t.overflowMode = TextOverflowModes.Overflow; return t; }
     private static void Stretch(RectTransform rt) { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
     private static void Place(RectTransform rt, Vector2 min, Vector2 max, Vector2 offMin, Vector2 offMax) { rt.anchorMin = min; rt.anchorMax = max; rt.offsetMin = offMin; rt.offsetMax = offMax; }
+    private static GameObject CreateButtonObject(string text, Transform parent, Color color)
+    {
+        return Panel(text + "Button", parent, color);
+    }
+    private static ThemeButtonKind GetButtonKind(string text)
+    {
+        return text switch
+        {
+            "Restart Run" => ThemeButtonKind.Danger,
+            "Quit" => ThemeButtonKind.Danger,
+            "Pause" => ThemeButtonKind.Secondary,
+            "Re-roll Die" => ThemeButtonKind.Secondary,
+            "Play Again" => ThemeButtonKind.Start,
+            _ => ThemeButtonKind.Primary
+        };
+    }
+
+    private static void ApplyThemeToExistingCanvas(Transform root)
+    {
+        ApplyPanelTheme(root, "StatsCard", ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.92f));
+        ApplyPanelTheme(root, "WarningCard", ThemePanelKind.Notice, new Color(1f, 1f, 1f, 0.95f));
+        ApplyPanelTheme(root, "ReportCard", ThemePanelKind.Small, new Color(1f, 1f, 1f, 0.9f));
+        ApplyPanelTheme(root, "PauseCard", ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
+        ApplyPanelTheme(root, "ResultCard", ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
+        ApplyButtonTheme(root, "Play Selected CardButton", ThemeButtonKind.Primary);
+        ApplyButtonTheme(root, "Re-roll DieButton", ThemeButtonKind.Secondary);
+        ApplyButtonTheme(root, "PauseButton", ThemeButtonKind.Secondary);
+        ApplyButtonTheme(root, "ResumeButton", ThemeButtonKind.Primary);
+        ApplyButtonTheme(root, "Restart RunButton", ThemeButtonKind.Danger);
+        ApplyButtonTheme(root, "QuitButton", ThemeButtonKind.Danger);
+        ApplyButtonTheme(root, "Play AgainButton", ThemeButtonKind.Start);
+    }
+
+    private static void ApplyPanelTheme(Transform root, string name, ThemePanelKind kind, Color tint)
+    {
+        Image image = FindImage(root, name);
+        if (image != null)
+        {
+            UiThemeStyler.ApplyPanel(image, kind, tint);
+        }
+    }
+
+    private static void ApplyButtonTheme(Transform root, string name, ThemeButtonKind kind)
+    {
+        Transform match = FindChildRecursive(root, name);
+        if (match == null)
+        {
+            return;
+        }
+
+        Button button = match.GetComponent<Button>();
+        if (button == null)
+        {
+            return;
+        }
+
+        TMP_Text label = match.GetComponentInChildren<TMP_Text>(true);
+        UiThemeStyler.ApplyButton(button, kind, label);
+    }
 }

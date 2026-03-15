@@ -3,11 +3,14 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [ExecuteAlways]
 public class SetupSceneController : MonoBehaviour
 {
-    private readonly string[] difficulties = { "Easy", "Normal", "Hard" };
+    private readonly string[] difficulties = { "Easy", "Medium", "Hard" };
     private readonly string[] jars = { "Balanced", "HighNitrates", "SnailHeavy", "Overgrown", "Fragile" };
     private readonly string[] temperatures = { "Cold", "Warm", "Hot" };
 
@@ -23,6 +26,7 @@ public class SetupSceneController : MonoBehaviour
     {
         if (!Application.isPlaying)
         {
+            if (!CanBuildEditorUi()) return;
             BuildUi();
             return;
         }
@@ -35,6 +39,7 @@ public class SetupSceneController : MonoBehaviour
     {
         if (!Application.isPlaying)
         {
+            if (!CanBuildEditorUi()) return;
             BuildUi();
         }
     }
@@ -59,37 +64,67 @@ public class SetupSceneController : MonoBehaviour
         GameObject bg = Panel("Background", canvas.transform, new Color(0.06f, 0.11f, 0.14f, 1f));
         Stretch(bg.GetComponent<RectTransform>());
 
-        GameObject card = Panel("Card", canvas.transform, new Color(0.9f, 0.95f, 0.97f, 0.97f));
-        Place(card.GetComponent<RectTransform>(), new Vector2(0.2f, 0.1f), new Vector2(0.8f, 0.9f), Vector2.zero, Vector2.zero);
+        GameObject card = Panel("Card", canvas.transform, new Color(1f, 1f, 1f, 1f));
+        Place(card.GetComponent<RectTransform>(), new Vector2(0.28f, 0.1f), new Vector2(0.72f, 0.9f), Vector2.zero, Vector2.zero);
+        UiThemeStyler.ApplyPanel(card.GetComponent<Image>(), ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
 
-        TextMeshProUGUI title = Label("Title", card.transform, 54, FontStyles.Bold, TextAlignmentOptions.Top);
-        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -40f), new Vector2(-40f, -110f));
+        TextMeshProUGUI title = Label("Title", card.transform, 48, FontStyles.Bold, TextAlignmentOptions.Top);
+        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(32f, -36f), new Vector2(-32f, -94f));
         title.text = "Glass World";
-        title.color = new Color(0.12f, 0.18f, 0.22f);
+        UiThemeStyler.ApplyTitle(title);
 
-        TextMeshProUGUI subtitle = Label("Subtitle", card.transform, 22, FontStyles.Normal, TextAlignmentOptions.Top);
-        Place(subtitle.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -118f), new Vector2(0f, -176f));
+        TextMeshProUGUI subtitle = Label("Subtitle", card.transform, 18, FontStyles.Normal, TextAlignmentOptions.Top);
+        Place(subtitle.rectTransform, new Vector2(0.08f, 1f), new Vector2(0.92f, 1f), new Vector2(0f, -104f), new Vector2(0f, -150f));
         subtitle.text = "Choose your starting settings before entering the card-driven jar.";
         subtitle.color = new Color(0.23f, 0.33f, 0.4f);
 
-        float top = -220f;
+        float top = -188f;
         CreateControl(card.transform, "Difficulty", "How forgiving the ecosystem is.", top, ChangeDifficulty, out difficultyValue);
-        top -= 110f;
+        top -= 126f;
         CreateControl(card.transform, "Starting Jar", "Pick the opening ecosystem condition.", top, ChangeJar, out jarValue);
-        top -= 110f;
+        top -= 126f;
         CreateControl(card.transform, "Starting Temperature", "Initial water temperature.", top, ChangeTemperature, out temperatureValue);
 
         TextMeshProUGUI hint = Label("Hint", card.transform, 18, FontStyles.Normal, TextAlignmentOptions.Center);
-        Place(hint.rectTransform, new Vector2(0.1f, 0f), new Vector2(0.9f, 0f), new Vector2(0f, 134f), new Vector2(0f, 198f));
-        hint.text = "Balanced + Normal is the recommended first card run.";
+        Place(hint.rectTransform, new Vector2(0.1f, 0f), new Vector2(0.9f, 0f), new Vector2(0f, 132f), new Vector2(0f, 178f));
+        hint.text = "Medium is the intended default experience.";
         hint.color = new Color(0.22f, 0.32f, 0.39f);
 
         Button playButton = CreateUiButton("Start Game", card.transform, new Color(0.36f, 0.78f, 0.54f), StartGame);
-        Place(playButton.GetComponent<RectTransform>(), new Vector2(0.35f, 0f), new Vector2(0.65f, 0f), new Vector2(0f, 44f), new Vector2(0f, 108f));
+        Place(playButton.GetComponent<RectTransform>(), new Vector2(0.28f, 0f), new Vector2(0.72f, 0f), new Vector2(0f, 40f), new Vector2(0f, 104f));
+    }
+
+    private bool CanBuildEditorUi()
+    {
+        if (Application.isPlaying)
+        {
+            return false;
+        }
+
+        if (this == null || gameObject == null)
+        {
+            return false;
+        }
+
+#if UNITY_EDITOR
+        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
+        {
+            return false;
+        }
+#endif
+
+        var scene = gameObject.scene;
+        if (!scene.IsValid() || !scene.isLoaded)
+        {
+            return false;
+        }
+
+        return !string.IsNullOrEmpty(scene.path);
     }
 
     private void BindExistingUi(GameObject canvasObject)
     {
+        ApplyThemeToExistingUi(canvasObject.transform);
         difficultyValue = FindText(canvasObject.transform, "DifficultyValue");
         jarValue = FindText(canvasObject.transform, "Starting JarValue");
         if (jarValue == null) jarValue = FindText(canvasObject.transform, "StartingJarValue");
@@ -127,28 +162,29 @@ public class SetupSceneController : MonoBehaviour
 
     private void CreateControl(Transform parent, string label, string hint, float top, Action<int> onAdjust, out TextMeshProUGUI valueText)
     {
-        GameObject box = Panel(label + "Box", parent, new Color(0.79f, 0.87f, 0.91f, 0.75f));
-        Place(box.GetComponent<RectTransform>(), new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, top), new Vector2(0f, top - 90f));
+        GameObject box = Panel(label + "Box", parent, new Color(1f, 1f, 1f, 1f));
+        Place(box.GetComponent<RectTransform>(), new Vector2(0.08f, 1f), new Vector2(0.92f, 1f), new Vector2(0f, top), new Vector2(0f, top - 104f));
+        UiThemeStyler.ApplyPanel(box.GetComponent<Image>(), ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.96f));
 
         TextMeshProUGUI labelText = Label(label + "Label", box.transform, 22, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(labelText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -10f), new Vector2(-18f, -36f));
+        Place(labelText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -12f), new Vector2(-18f, -40f));
         labelText.text = label;
         labelText.color = new Color(0.11f, 0.17f, 0.22f);
 
         TextMeshProUGUI hintText = Label(label + "Hint", box.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(hintText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -34f), new Vector2(-18f, -54f));
+        Place(hintText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -40f), new Vector2(-18f, -62f));
         hintText.text = hint;
         hintText.color = new Color(0.24f, 0.33f, 0.39f);
 
         Button minus = CreateUiButton("-", box.transform, new Color(0.91f, 0.61f, 0.4f), delegate { onAdjust(-1); });
-        Place(minus.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 10f), new Vector2(86f, 48f));
+        Place(minus.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 14f), new Vector2(78f, 56f));
 
         valueText = Label(label + "Value", box.transform, 22, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(valueText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(96f, 8f), new Vector2(-96f, 50f));
+        Place(valueText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(92f, 8f), new Vector2(-92f, 58f));
         valueText.color = new Color(0.11f, 0.17f, 0.22f);
 
         Button plus = CreateUiButton("+", box.transform, new Color(0.42f, 0.76f, 0.95f), delegate { onAdjust(1); });
-        Place(plus.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-86f, 10f), new Vector2(-18f, 48f));
+        Place(plus.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-78f, 14f), new Vector2(-18f, 56f));
     }
 
     private static GameObject Panel(string name, Transform parent, Color color)
@@ -163,8 +199,8 @@ public class SetupSceneController : MonoBehaviour
 
     private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick)
     {
-        GameObject go = Panel(text + "Button", parent, color);
-        Button button = go.AddComponent<Button>();
+        GameObject go = CreateButtonObject(text, parent, color);
+        Button button = go.GetComponent<Button>() ?? go.AddComponent<Button>();
         ColorBlock colors = button.colors;
         colors.highlightedColor = Color.Lerp(color, Color.white, 0.18f);
         colors.pressedColor = Color.Lerp(color, Color.black, 0.12f);
@@ -174,7 +210,78 @@ public class SetupSceneController : MonoBehaviour
         label.text = text;
         label.color = new Color(0.11f, 0.15f, 0.19f);
         Stretch(label.rectTransform);
+        UiThemeStyler.ApplyButton(button, GetButtonKind(text), label);
         return button;
+    }
+
+    private static GameObject CreateButtonObject(string text, Transform parent, Color color)
+    {
+        return Panel(text + "Button", parent, color);
+    }
+
+    private static ThemeButtonKind GetButtonKind(string text)
+    {
+        if (text == "Start Game")
+        {
+            return ThemeButtonKind.Start;
+        }
+
+        return text == "-" ? ThemeButtonKind.Danger : ThemeButtonKind.Secondary;
+    }
+
+    private static void ApplyThemeToExistingUi(Transform root)
+    {
+        ApplyPanelTheme(root, "Card", ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
+        ApplyPanelTheme(root, "DifficultyBox", ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.96f));
+        ApplyPanelTheme(root, "Starting JarBox", ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.96f));
+        ApplyPanelTheme(root, "Starting TemperatureBox", ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.96f));
+        ApplyButtonTheme(root, "Start GameButton", ThemeButtonKind.Start);
+        ApplyButtonTheme(root, "-Button", ThemeButtonKind.Danger, 0);
+        ApplyButtonTheme(root, "+Button", ThemeButtonKind.Secondary, 0);
+        ApplyButtonTheme(root, "-Button", ThemeButtonKind.Danger, 1);
+        ApplyButtonTheme(root, "+Button", ThemeButtonKind.Secondary, 1);
+        ApplyButtonTheme(root, "-Button", ThemeButtonKind.Danger, 2);
+        ApplyButtonTheme(root, "+Button", ThemeButtonKind.Secondary, 2);
+    }
+
+    private static void ApplyPanelTheme(Transform root, string name, ThemePanelKind kind, Color tint)
+    {
+        Transform match = FindChildRecursive(root, name);
+        if (match == null)
+        {
+            return;
+        }
+
+        Image image = match.GetComponent<Image>();
+        if (image != null)
+        {
+            UiThemeStyler.ApplyPanel(image, kind, tint);
+        }
+    }
+
+    private static void ApplyButtonTheme(Transform root, string name, ThemeButtonKind kind, int matchIndex = -1)
+    {
+        Button[] buttons = root.GetComponentsInChildren<Button>(true);
+        int seen = 0;
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            if (buttons[i].name != name)
+            {
+                continue;
+            }
+
+            if (matchIndex >= 0 && seen++ != matchIndex)
+            {
+                continue;
+            }
+
+            TMP_Text label = buttons[i].GetComponentInChildren<TMP_Text>(true);
+            UiThemeStyler.ApplyButton(buttons[i], kind, label);
+            if (matchIndex >= 0)
+            {
+                return;
+            }
+        }
     }
 
     private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions anchor)
@@ -187,7 +294,7 @@ public class SetupSceneController : MonoBehaviour
         text.fontSize = size;
         text.fontStyle = style;
         text.alignment = anchor;
-        text.enableWordWrapping = true;
+        text.textWrappingMode = TextWrappingModes.Normal;
         text.overflowMode = TextOverflowModes.Overflow;
         return text;
     }

@@ -311,7 +311,6 @@ namespace NueGames.NueDeck.Scripts.Collection
                 
             if (GameManager.PersistentGameplayData.CanUseCards && GameManager.PersistentGameplayData.CurrentMana >= _heldCard.CardData.ManaCost)
             {
-                RaycastHit hit;
                 var mainRay = _mainCam.ScreenPointToRay(mousePos);
                 var _canUse = false;
                 CharacterBase selfCharacter = CombatManager.CurrentMainAlly;

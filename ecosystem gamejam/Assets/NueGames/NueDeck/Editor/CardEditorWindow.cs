@@ -233,7 +233,7 @@ namespace NueGames.NueDeck.Editor
         private void ChangeCardSprite()
         {
             EditorGUILayout.BeginHorizontal();
-            CardSprite = (Sprite)EditorGUILayout.ObjectField("Card Sprite:", CardSprite,typeof(Sprite));
+            CardSprite = (Sprite)EditorGUILayout.ObjectField("Card Sprite:", CardSprite, typeof(Sprite), false);
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
         }

@@ -8,7 +8,6 @@ namespace NueGames.NueDeck.Scripts.Utils
 #if UNITY_EDITOR
         
 
-        private static int maxTags = 10000;
         private static int maxLayers = 31;
 
 /////////////////////////////////////////////////////////////////////
