@@ -222,7 +222,7 @@ public class SetupSceneController : MonoBehaviour
         GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.95f, 0.99f, 0.97f, 0.9f));
         LayoutElement layout = logoPlate.AddComponent<LayoutElement>();
         layout.ignoreLayout = true;
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-182f, -22f), new Vector2(-28f, -96f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-182f, -96f), new Vector2(-28f, -22f));
         UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.95f, 0.99f, 0.97f, 0.9f));
 
         Outline outline = logoPlate.AddComponent<Outline>();

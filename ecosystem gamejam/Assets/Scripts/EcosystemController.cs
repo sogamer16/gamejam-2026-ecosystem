@@ -885,7 +885,7 @@ public class EcosystemController : MonoBehaviour
         }
 
         GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.94f, 0.98f, 0.96f, 0.9f));
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -126f), new Vector2(-14f, -194f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -194f), new Vector2(-14f, -126f));
         UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.94f, 0.98f, 0.96f, 0.9f));
 
         Outline outline = logoPlate.AddComponent<Outline>();
