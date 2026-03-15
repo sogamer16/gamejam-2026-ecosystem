@@ -106,6 +106,7 @@ public class EcosystemController : MonoBehaviour
     private Image playFlash;
     private GameObject menuPanel;
     private GameObject resultPanel;
+    private GameObject pausePanel;
     private TextMeshProUGUI bannerText;
     private TextMeshProUGUI statsText;
     private TextMeshProUGUI warningText;
@@ -138,6 +139,7 @@ public class EcosystemController : MonoBehaviour
     private EventDef currentEvent;
     private int hoveredCardIndex = -1;
     private bool isResolvingCard;
+    private bool isPaused;
     private int animatingCardIndex = -1;
     private float playAnimTime;
     private float playAnimDuration = 0.22f;
@@ -220,6 +222,21 @@ public class EcosystemController : MonoBehaviour
         EnsurePresentationWorld();
     }
 
+    [ContextMenu("Rebuild Gameplay Canvas")]
+    private void RebuildGameplayCanvasInEditor()
+    {
+        GameObject existingCanvas = GameObject.Find("EcosystemCanvas");
+        if (existingCanvas != null)
+        {
+            if (Application.isPlaying) Destroy(existingCanvas);
+            else DestroyImmediate(existingCanvas);
+        }
+
+        ClearVisualCaches();
+        canvas = null;
+        BuildVisuals();
+    }
+
     private bool CanBuildEditorArtifacts()
     {
         if (Application.isPlaying) return false;
@@ -234,6 +251,19 @@ public class EcosystemController : MonoBehaviour
     {
         if (!Application.isPlaying)
         {
+            return;
+        }
+
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame && state == GameState.Playing)
+        {
+            TogglePause();
+        }
+
+        if (isPaused)
+        {
+            UpdateSceneLighting();
+            UpdateWater();
+            UpdateJarFx();
             return;
         }
 
@@ -338,6 +368,8 @@ public class EcosystemController : MonoBehaviour
         speciesText = Label("Species", right.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopRight);
         Place(speciesText.rectTransform, new Vector2(0.45f, 1f), new Vector2(1f, 1f), new Vector2(6f, -76f), new Vector2(-24f, -154f));
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
+        Button pauseButton = CreateUiButton("Pause", right.transform, new Color(0.82f, 0.84f, 0.74f), TogglePause);
+        Place(pauseButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-204f, -24f), new Vector2(-24f, -80f));
 
         jarRect = null;
         water = null;
@@ -367,6 +399,50 @@ public class EcosystemController : MonoBehaviour
         Button again = CreateUiButton("Play Again", resultPanel.transform, new Color(0.42f, 0.75f, 0.94f), StartGame);
         Place(again.GetComponent<RectTransform>(), new Vector2(0.4f, 0.22f), new Vector2(0.6f, 0.3f), Vector2.zero, Vector2.zero);
         resultPanel.SetActive(false);
+
+        pausePanel = Panel("Pause", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.82f));
+        Stretch(pausePanel.GetComponent<RectTransform>());
+        TextMeshProUGUI pauseTitle = Label("PauseTitle", pausePanel.transform, 42, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(pauseTitle.rectTransform, new Vector2(0.28f, 0.6f), new Vector2(0.72f, 0.76f), Vector2.zero, Vector2.zero);
+        pauseTitle.text = "Paused";
+        pauseTitle.color = Color.white;
+        Button resumeButton = CreateUiButton("Resume", pausePanel.transform, new Color(0.42f, 0.75f, 0.94f), TogglePause);
+        Place(resumeButton.GetComponent<RectTransform>(), new Vector2(0.38f, 0.42f), new Vector2(0.62f, 0.5f), Vector2.zero, Vector2.zero);
+        Button pauseRestartButton = CreateUiButton("Restart Run", pausePanel.transform, new Color(0.86f, 0.42f, 0.34f), RestartFromPause);
+        Place(pauseRestartButton.GetComponent<RectTransform>(), new Vector2(0.38f, 0.31f), new Vector2(0.62f, 0.39f), Vector2.zero, Vector2.zero);
+        Button quitButton = CreateUiButton("Quit", pausePanel.transform, new Color(0.8f, 0.8f, 0.82f), QuitGame);
+        Place(quitButton.GetComponent<RectTransform>(), new Vector2(0.38f, 0.2f), new Vector2(0.62f, 0.28f), Vector2.zero, Vector2.zero);
+        pausePanel.SetActive(false);
+    }
+
+    private void TogglePause()
+    {
+        if (state != GameState.Playing || isResolvingCard || pausePanel == null)
+        {
+            return;
+        }
+
+        isPaused = !isPaused;
+        pausePanel.SetActive(isPaused);
+    }
+
+    private void RestartFromPause()
+    {
+        isPaused = false;
+        if (pausePanel != null)
+        {
+            pausePanel.SetActive(false);
+        }
+
+        StartGame();
+    }
+
+    private void QuitGame()
+    {
+        Application.Quit();
+#if UNITY_EDITOR
+        Debug.Log("Quit requested.");
+#endif
     }
 
     private bool BindExistingVisuals(GameObject canvasObject)
@@ -401,6 +477,7 @@ public class EcosystemController : MonoBehaviour
         }
         menuPanel = null;
         resultPanel = FindObject(canvasObject.transform, "Result");
+        pausePanel = FindObject(canvasObject.transform, "Pause");
         tooltipPanel = FindObject(canvasObject.transform, "Tooltip");
         bannerText = FindText(canvasObject.transform, "Banner");
         statsText = FindText(canvasObject.transform, "Stats");
@@ -413,7 +490,7 @@ public class EcosystemController : MonoBehaviour
         resultText = FindText(canvasObject.transform, "ResultText");
         tooltipText = FindText(canvasObject.transform, "TooltipText");
 
-        if (canvas == null || rightPanelRect == null || bannerText == null || resultPanel == null)
+        if (canvas == null || rightPanelRect == null || bannerText == null || resultPanel == null || pausePanel == null)
         {
             return false;
         }
@@ -673,13 +750,17 @@ public class EcosystemController : MonoBehaviour
 
     private void ShowMenu()
     {
+        isPaused = false;
+        if (pausePanel != null) pausePanel.SetActive(false);
         StartGame();
     }
 
     private void StartGame()
     {
+        isPaused = false;
         if (menuPanel != null) menuPanel.SetActive(false);
         if (resultPanel != null) resultPanel.SetActive(false);
+        if (pausePanel != null) pausePanel.SetActive(false);
         state = GameState.Playing;
         difficulty = GameSettingsStore.HasSelection ? (DifficultyMode)GameSettingsStore.DifficultyIndex : DifficultyMode.Normal;
         startingJar = GameSettingsStore.HasSelection ? (StartingJar)GameSettingsStore.StartingJarIndex : StartingJar.Balanced;
@@ -800,7 +881,7 @@ public class EcosystemController : MonoBehaviour
 
     private void TickDay()
     {
-        if (state != GameState.Playing || isResolvingCard) return;
+        if (state != GameState.Playing || isResolvingCard || isPaused) return;
         if (selected.Count == 0) { latestWarnings = "Play 1 card before ending the day."; RefreshHud(); return; }
         StartCoroutine(ResolveSelectedCardRoutine(selected[0]));
     }
@@ -1940,6 +2021,8 @@ public class EcosystemController : MonoBehaviour
     }
     private void EndGame(bool won, string message)
     {
+        isPaused = false;
+        if (pausePanel != null) pausePanel.SetActive(false);
         state = GameState.Result;
         resultPanel.SetActive(true);
         resultText.text = won
