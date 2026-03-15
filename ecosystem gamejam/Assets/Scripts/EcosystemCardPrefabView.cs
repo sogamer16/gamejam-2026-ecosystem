@@ -173,11 +173,12 @@ public class EcosystemCardPrefabView : MonoBehaviour
         shineImage.rectTransform.pivot = new Vector2(0f, 0.5f);
         shineImage.transform.SetAsLastSibling();
 
-        categoryLabel = CreateLabel("CategoryLabel", 18, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        categoryLabel = CreateLabel("CategoryLabel", 16, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        categoryLabel.textWrappingMode = TextWrappingModes.Normal;
         categoryLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
         categoryLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-        categoryLabel.rectTransform.offsetMin = new Vector2(26f, -52f);
-        categoryLabel.rectTransform.offsetMax = new Vector2(-26f, -18f);
+        categoryLabel.rectTransform.offsetMin = new Vector2(26f, -60f);
+        categoryLabel.rectTransform.offsetMax = new Vector2(-26f, -16f);
 
         GameObject buttonObject = new GameObject("PlayChip", typeof(RectTransform), typeof(Image));
         buttonObject.transform.SetParent(transform, false);
@@ -185,10 +186,10 @@ public class EcosystemCardPrefabView : MonoBehaviour
         buttonRect.anchorMin = new Vector2(0.5f, 0f);
         buttonRect.anchorMax = new Vector2(0.5f, 0f);
         buttonRect.pivot = new Vector2(0.5f, 0f);
-        buttonRect.sizeDelta = new Vector2(154f, 42f);
+        buttonRect.sizeDelta = new Vector2(170f, 44f);
         buttonRect.anchoredPosition = new Vector2(0f, 18f);
         Image buttonImage = buttonObject.GetComponent<Image>();
-        buttonImage.color = new Color(0.93f, 0.84f, 0.63f, 0.92f);
+        buttonImage.color = new Color(0.93f, 0.84f, 0.63f, 0.95f);
         buttonImage.raycastTarget = false;
 
         buttonLabel = CreateLabel("PlayChipLabel", 18, FontStyles.Bold, TextAlignmentOptions.Center);

@@ -158,6 +158,12 @@ public class EcosystemController : MonoBehaviour
     private TextMeshProUGUI resultText;
     private TextMeshProUGUI tooltipText;
     private GameObject tooltipPanel;
+    private TextMeshProUGUI pauseStatusText;
+    private Image nitrateBarFill;
+    private Image stableProgressFill;
+    private Image warningCardImage;
+    private GameObject playButtonGlow;
+    private float warningPulseTime;
 
     private int day;
     private int stableDays;
@@ -322,6 +328,8 @@ public class EcosystemController : MonoBehaviour
         UpdateSceneLighting();
         UpdateWater();
         UpdateJarFx();
+        UpdateWarningPulse();
+        UpdatePlayButtonGlow();
     }
 
     private void BuildVisuals()
@@ -378,30 +386,62 @@ public class EcosystemController : MonoBehaviour
         desc.color = new Color(0.83f, 0.91f, 0.87f);
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
-        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -132f), new Vector2(-14f, -270f));
+        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -132f), new Vector2(-14f, -338f));
         UiThemeStyler.ApplyPanel(statsCard.GetComponent<Image>(), ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.92f));
-        statsText = Label("Stats", left.transform, 17, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(statsText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -144f), new Vector2(-22f, -232f));
+        statsText = Label("Stats", left.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        statsText.richText = true;
+        Place(statsText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -144f), new Vector2(-22f, -330f));
         statsText.color = Color.white;
+
+        // Stable days progress bar (inside stats card, pinned to bottom)
+        GameObject stableBarTrack = Panel("StableBarTrack", statsCard.transform, new Color(0f, 0f, 0f, 0.28f));
+        Place(stableBarTrack.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 28f), new Vector2(-14f, 38f));
+        stableBarTrack.GetComponent<Image>().raycastTarget = false;
+        GameObject stableFillGo = Panel("StableFill", statsCard.transform, new Color(0.44f, 0.88f, 0.66f, 0.85f));
+        Image stableFillImg = stableFillGo.GetComponent<Image>();
+        stableFillImg.type = Image.Type.Filled;
+        stableFillImg.fillMethod = Image.FillMethod.Horizontal;
+        stableFillImg.fillAmount = 0f;
+        stableFillImg.raycastTarget = false;
+        Place(stableFillGo.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 28f), new Vector2(-14f, 38f));
+        stableProgressFill = stableFillImg;
+
+        // Nitrate danger bar (inside stats card, just above stable bar)
+        GameObject nitrateBarTrack = Panel("NitrateBarTrack", statsCard.transform, new Color(0f, 0f, 0f, 0.28f));
+        Place(nitrateBarTrack.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 24f));
+        nitrateBarTrack.GetComponent<Image>().raycastTarget = false;
+        GameObject nitrateFillGo = Panel("NitrateFill", statsCard.transform, new Color(0.42f, 0.88f, 0.58f, 0.85f));
+        Image nitrateFillImg = nitrateFillGo.GetComponent<Image>();
+        nitrateFillImg.type = Image.Type.Filled;
+        nitrateFillImg.fillMethod = Image.FillMethod.Horizontal;
+        nitrateFillImg.fillAmount = 0f;
+        nitrateFillImg.raycastTarget = false;
+        Place(nitrateFillGo.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 24f));
+        nitrateBarFill = nitrateFillImg;
+
         GameObject warningCard = Panel("WarningCard", left.transform, new Color(1f, 0.84f, 0.3f, 0.06f));
-        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -282f), new Vector2(-14f, -412f));
+        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -350f), new Vector2(-14f, -460f));
         UiThemeStyler.ApplyPanel(warningCard.GetComponent<Image>(), ThemePanelKind.Notice, new Color(1f, 1f, 1f, 0.95f));
-        warningText = Label("Warnings", left.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -294f), new Vector2(-22f, -342f));
+        warningCardImage = warningCard.GetComponent<Image>();
+        warningText = Label("Warnings", left.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -358f), new Vector2(-22f, -412f));
         warningText.color = new Color(0.98f, 0.84f, 0.4f);
-        eventText = Label("Event", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(eventText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -346f), new Vector2(-22f, -384f));
+        eventText = Label("Event", left.transform, 12, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(eventText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -416f), new Vector2(-22f, -452f));
         eventText.color = new Color(0.84f, 0.9f, 0.95f);
         selectedText = Label("Selected", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(selectedText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -388f), new Vector2(-22f, -430f));
+        Place(selectedText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -458f), new Vector2(-22f, -500f));
         selectedText.color = new Color(0.88f, 0.95f, 0.9f);
         GameObject reportCard = Panel("ReportCard", left.transform, new Color(1f, 1f, 1f, 0.04f));
         Place(reportCard.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 172f));
         UiThemeStyler.ApplyPanel(reportCard.GetComponent<Image>(), ThemePanelKind.Small, new Color(1f, 1f, 1f, 0.9f));
-        reportText = Label("Report", left.transform, 12, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        reportText = Label("Report", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(reportText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(22f, 22f), new Vector2(-22f, 164f));
         reportText.color = new Color(0.84f, 0.92f, 0.88f);
 
+        playButtonGlow = Panel("PlayButtonGlow", left.transform, new Color(0.38f, 0.94f, 0.62f, 0f));
+        Place(playButtonGlow.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(12f, 180f), new Vector2(-12f, 240f));
+        playButtonGlow.GetComponent<Image>().raycastTarget = false;
         Button next = CreateUiButton("Play Selected Card", left.transform, new Color(0.38f, 0.74f, 0.51f), TickDay);
         Place(next.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(18f, 184f), new Vector2(-18f, 236f));
         Button reroll = CreateUiButton("Re-roll Die", left.transform, new Color(0.88f, 0.82f, 0.46f), RerollDie);
@@ -414,9 +454,12 @@ public class EcosystemController : MonoBehaviour
         o.effectColor = new Color(0.16f, 0.28f, 0.22f, 0.8f);
         o.effectDistance = new Vector2(4f, 4f);
 
-        bannerText = Label("Banner", right.transform, 22, FontStyles.Bold, TextAlignmentOptions.Top);
-        Place(bannerText.rectTransform, new Vector2(0.2f, 1f), new Vector2(0.8f, 1f), new Vector2(0f, -18f), new Vector2(0f, -54f));
-        bannerText.color = new Color(0.13f, 0.2f, 0.16f);
+        GameObject bannerBg = Panel("BannerBg", right.transform, new Color(0.06f, 0.11f, 0.1f, 0.68f));
+        Place(bannerBg.GetComponent<RectTransform>(), new Vector2(0.08f, 1f), new Vector2(0.92f, 1f), new Vector2(0f, -14f), new Vector2(0f, -58f));
+        bannerBg.GetComponent<Image>().raycastTarget = false;
+        bannerText = Label("Banner", right.transform, 22, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(bannerText.rectTransform, new Vector2(0.08f, 1f), new Vector2(0.92f, 1f), new Vector2(0f, -18f), new Vector2(0f, -54f));
+        bannerText.color = new Color(0.88f, 0.96f, 0.9f);
         deckText = Label("Deck", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(deckText.rectTransform, new Vector2(0f, 1f), new Vector2(0.24f, 1f), new Vector2(24f, -68f), new Vector2(-8f, -104f));
         deckText.color = new Color(0.14f, 0.2f, 0.17f);
@@ -438,41 +481,59 @@ public class EcosystemController : MonoBehaviour
         handLabel.color = new Color(0.13f, 0.2f, 0.16f);
         CreateCardSlots(right.transform);
 
-        tooltipPanel = Panel("Tooltip", canvas.transform, new Color(0.05f, 0.09f, 0.1f, 0.92f));
-        Place(tooltipPanel.GetComponent<RectTransform>(), new Vector2(0.72f, 0.03f), new Vector2(0.95f, 0.105f), Vector2.zero, Vector2.zero);
-        tooltipText = Label("TooltipText", tooltipPanel.transform, 15, FontStyles.Normal, TextAlignmentOptions.Center);
-        Stretch(tooltipText.rectTransform);
-        tooltipText.color = Color.white;
+        tooltipPanel = Panel("Tooltip", canvas.transform, new Color(0.06f, 0.11f, 0.12f, 0.94f));
+        Place(tooltipPanel.GetComponent<RectTransform>(), new Vector2(0.58f, 0.02f), new Vector2(0.97f, 0.18f), Vector2.zero, Vector2.zero);
+        UiThemeStyler.ApplyPanel(tooltipPanel.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.92f, 0.96f, 0.94f, 0.97f));
+        tooltipText = Label("TooltipText", tooltipPanel.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        tooltipText.richText = true;
+        Place(tooltipText.rectTransform, Vector2.zero, Vector2.one, new Vector2(18f, 10f), new Vector2(-18f, -10f));
+        tooltipText.color = new Color(0.12f, 0.17f, 0.2f);
+        tooltipText.textWrappingMode = TextWrappingModes.Normal;
         tooltipPanel.SetActive(false);
         menuPanel = null;
 
         resultPanel = Panel("Result", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.76f));
         Stretch(resultPanel.GetComponent<RectTransform>());
         GameObject resultCard = Panel("ResultCard", resultPanel.transform, new Color(1f, 1f, 1f, 1f));
-        Place(resultCard.GetComponent<RectTransform>(), new Vector2(0.3f, 0.26f), new Vector2(0.7f, 0.68f), Vector2.zero, Vector2.zero);
+        Place(resultCard.GetComponent<RectTransform>(), new Vector2(0.26f, 0.16f), new Vector2(0.74f, 0.76f), Vector2.zero, Vector2.zero);
         UiThemeStyler.ApplyPanel(resultCard.GetComponent<Image>(), ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
-        resultText = Label("ResultText", resultCard.transform, 32, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(resultText.rectTransform, new Vector2(0.08f, 0.32f), new Vector2(0.92f, 0.84f), Vector2.zero, Vector2.zero);
+        resultText = Label("ResultText", resultCard.transform, 28, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(resultText.rectTransform, new Vector2(0.06f, 0.3f), new Vector2(0.94f, 0.9f), Vector2.zero, Vector2.zero);
         resultText.color = new Color(0.21f, 0.15f, 0.09f);
         Button again = CreateUiButton("Play Again", resultCard.transform, new Color(0.42f, 0.75f, 0.94f), StartGame);
-        Place(again.GetComponent<RectTransform>(), new Vector2(0.22f, 0.08f), new Vector2(0.78f, 0.22f), Vector2.zero, Vector2.zero);
+        Place(again.GetComponent<RectTransform>(), new Vector2(0.52f, 0.06f), new Vector2(0.9f, 0.22f), Vector2.zero, Vector2.zero);
+        Button settings = CreateUiButton("Change Settings", resultCard.transform, new Color(0.82f, 0.84f, 0.74f), GoToSetup);
+        Place(settings.GetComponent<RectTransform>(), new Vector2(0.1f, 0.06f), new Vector2(0.48f, 0.22f), Vector2.zero, Vector2.zero);
         resultPanel.SetActive(false);
 
-        pausePanel = Panel("Pause", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.76f));
+        pausePanel = Panel("Pause", canvas.transform, new Color(0.03f, 0.05f, 0.07f, 0.82f));
         Stretch(pausePanel.GetComponent<RectTransform>());
         GameObject pauseCard = Panel("PauseCard", pausePanel.transform, new Color(1f, 1f, 1f, 1f));
-        Place(pauseCard.GetComponent<RectTransform>(), new Vector2(0.34f, 0.24f), new Vector2(0.66f, 0.68f), Vector2.zero, Vector2.zero);
+        Place(pauseCard.GetComponent<RectTransform>(), new Vector2(0.30f, 0.15f), new Vector2(0.70f, 0.80f), Vector2.zero, Vector2.zero);
         UiThemeStyler.ApplyPanel(pauseCard.GetComponent<Image>(), ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
-        TextMeshProUGUI pauseTitle = Label("PauseTitle", pauseCard.transform, 34, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(pauseTitle.rectTransform, new Vector2(0.12f, 0.7f), new Vector2(0.88f, 0.88f), Vector2.zero, Vector2.zero);
-        pauseTitle.text = "Paused";
+
+        TextMeshProUGUI pauseTitle = Label("PauseTitle", pauseCard.transform, 42, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(pauseTitle.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -52f), new Vector2(0f, -8f));
+        pauseTitle.text = "Game Paused";
         pauseTitle.color = new Color(0.21f, 0.15f, 0.09f);
-        Button resumeButton = CreateUiButton("Resume", pauseCard.transform, new Color(0.42f, 0.75f, 0.94f), TogglePause);
-        Place(resumeButton.GetComponent<RectTransform>(), new Vector2(0.14f, 0.46f), new Vector2(0.86f, 0.6f), Vector2.zero, Vector2.zero);
-        Button pauseRestartButton = CreateUiButton("Restart Run", pauseCard.transform, new Color(0.86f, 0.42f, 0.34f), RestartFromPause);
-        Place(pauseRestartButton.GetComponent<RectTransform>(), new Vector2(0.14f, 0.28f), new Vector2(0.86f, 0.42f), Vector2.zero, Vector2.zero);
-        Button quitButton = CreateUiButton("Quit", pauseCard.transform, new Color(0.8f, 0.8f, 0.82f), QuitGame);
-        Place(quitButton.GetComponent<RectTransform>(), new Vector2(0.14f, 0.1f), new Vector2(0.86f, 0.24f), Vector2.zero, Vector2.zero);
+
+        pauseStatusText = Label("PauseStatus", pauseCard.transform, 17, FontStyles.Normal, TextAlignmentOptions.Center);
+        Place(pauseStatusText.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -100f), new Vector2(0f, -58f));
+        pauseStatusText.color = new Color(0.28f, 0.38f, 0.44f);
+
+        Button resumeButton = CreateUiButton("Resume Game", pauseCard.transform, new Color(0.34f, 0.78f, 0.5f), TogglePause);
+        Place(resumeButton.GetComponent<RectTransform>(), new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -176f), new Vector2(0f, -116f));
+
+        Button pauseRestartButton = CreateUiButton("Restart Run", pauseCard.transform, new Color(0.88f, 0.52f, 0.3f), RestartFromPause);
+        Place(pauseRestartButton.GetComponent<RectTransform>(), new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -244f), new Vector2(0f, -184f));
+
+        TextMeshProUGUI restartWarning = Label("RestartWarning", pauseCard.transform, 13, FontStyles.Normal, TextAlignmentOptions.Center);
+        Place(restartWarning.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -278f), new Vector2(0f, -248f));
+        restartWarning.text = "Restarting will lose all current progress.";
+        restartWarning.color = new Color(0.55f, 0.3f, 0.18f);
+
+        Button quitButton = CreateUiButton("Quit to Desktop", pauseCard.transform, new Color(0.68f, 0.68f, 0.7f), QuitGame);
+        Place(quitButton.GetComponent<RectTransform>(), new Vector2(0.2f, 0f), new Vector2(0.8f, 0f), new Vector2(0f, 32f), new Vector2(0f, 80f));
         pausePanel.SetActive(false);
     }
 
@@ -485,6 +546,13 @@ public class EcosystemController : MonoBehaviour
 
         isPaused = !isPaused;
         pausePanel.SetActive(isPaused);
+        if (isPaused && pauseStatusText != null)
+        {
+            DifficultySettings s = GetDifficultySettings();
+            pauseStatusText.text = jarName + "  ·  " + difficulty + "  ·  Day " + day
+                + "\nStable days: " + stableDays + " / " + s.StableDaysToWin
+                + "   Nitrates: " + nitrateLevel.ToString("0") + " / 100";
+        }
     }
 
     private void RestartFromPause()
@@ -504,6 +572,13 @@ public class EcosystemController : MonoBehaviour
 #if UNITY_EDITOR
         EditorApplication.isPlaying = false;
 #endif
+    }
+
+    private void GoToSetup()
+    {
+        isPaused = false;
+        state = GameState.Menu;
+        SceneManager.LoadScene("main");
     }
 
     private bool BindExistingVisuals(GameObject canvasObject)
@@ -1097,9 +1172,47 @@ public class EcosystemController : MonoBehaviour
 
     private void SetupDayPresentation()
     {
-        latestWarnings = "Roll unlocks which cards can be played this turn.";
-        dayReport = jarName + "\nDay " + day + "\nPlan around your die roll and remaining re-rolls.";
-        if (bannerText != null) bannerText.text = jarName + "  Day " + day + " - Roll " + currentDieRoll + " - Play 1 card.";
+        DifficultySettings settings = GetDifficultySettings();
+        bool uncommonUnlocked = currentDieRoll >= settings.UncommonUnlockRoll;
+        bool rareUnlocked = currentDieRoll >= settings.RareUnlockRoll;
+
+        string unlockLine;
+        if (rareUnlocked)
+            unlockLine = "Roll " + currentDieRoll + " — Common, Uncommon & Rare cards available!";
+        else if (uncommonUnlocked)
+            unlockLine = "Roll " + currentDieRoll + " — Common & Uncommon cards available  (need " + settings.RareUnlockRoll + " for Rare)";
+        else
+            unlockLine = "Roll " + currentDieRoll + " — Common cards only  (need " + settings.UncommonUnlockRoll + " for Uncommon, " + settings.RareUnlockRoll + " for Rare)";
+
+        string rerollLine = rerollTokens > 0
+            ? rerollTokens + " re-roll" + (rerollTokens > 1 ? "s" : "") + " remaining — re-roll to try for a higher number."
+            : "No re-rolls left this turn.";
+
+        int algae = CountSpecies(SpeciesType.Algae);
+        int fish = CountSpecies(SpeciesType.Fish);
+        int snails = CountSpecies(SpeciesType.Snail);
+        string stateHint = "";
+        if (algae >= settings.AlgaeWarning)
+            stateHint = "Algae is at bloom risk — consider an Algae or Snail card.";
+        else if (nitrateLevel >= settings.NitrateWarning)
+            stateHint = "Nitrates are high — a Water card would help.";
+        else if (fish < settings.StableFishMin)
+            stateHint = "Fish count is low — you need " + settings.StableFishMin + " fish to win.";
+        else if (fishHungryTurns > 0)
+            stateHint = "Fish are hungry — play a Feed Fish card to avoid grazing.";
+        else if (snails > 0 && algae <= settings.SnailStarveThreshold)
+            stateHint = "Snails are starving — algae is too low, add more or lose a snail.";
+
+        latestWarnings = string.IsNullOrEmpty(stateHint)
+            ? "Jar looks stable. Choose a card to maintain it."
+            : stateHint;
+
+        dayReport = jarName + "  ·  Day " + day + "\n\n"
+            + unlockLine + "\n"
+            + rerollLine
+            + (string.IsNullOrEmpty(stateHint) ? "" : "\n\nTip: " + stateHint);
+
+        if (bannerText != null) bannerText.text = "Day " + day + "  ·  Roll " + currentDieRoll + "  ·  Select a card to play";
         RefreshHud();
     }
 
@@ -1453,60 +1566,131 @@ public class EcosystemController : MonoBehaviour
     {
         DifficultySettings settings = GetDifficultySettings();
         List<string> warnings = new List<string>();
-        if (bloom) warnings.Add("Algae bloom risk is rising.");
-        if (nitrateLevel >= settings.NitrateWarning) warnings.Add("Nitrates are in the warning zone.");
-        if (fishHungryTurns > 0) warnings.Add("Fish are going hungry.");
-        if (snails > 0 && algae <= settings.SnailStarveThreshold) warnings.Add("Snails may starve if algae stays this low.");
-        if (fish < settings.StableFishMin) warnings.Add("Fish count is below the stability target.");
+        if (bloom) warnings.Add("Algae bloom risk — at " + algae + ", blooms at " + settings.AlgaeWarning + "!");
+        if (nitrateLevel >= settings.NitrateCollapse * 0.8f)
+            warnings.Add("Nitrates critical! " + nitrateLevel.ToString("0") + " / " + settings.NitrateCollapse.ToString("0") + " (collapse imminent)");
+        else if (nitrateLevel >= settings.NitrateWarning)
+            warnings.Add("Nitrates high — " + nitrateLevel.ToString("0") + ", collapse at " + settings.NitrateCollapse.ToString("0"));
+        if (fishHungryTurns > 0) warnings.Add("Fish hungry " + fishHungryTurns + " turn" + (fishHungryTurns > 1 ? "s" : "") + " — play a Feed Fish card soon");
+        if (snails > 0 && algae <= settings.SnailStarveThreshold) warnings.Add("Snails starving — algae at " + algae + ", snails need " + (settings.SnailStarveThreshold + 1) + "+");
+        if (fish < settings.StableFishMin) warnings.Add("Too few fish — have " + fish + ", need " + settings.StableFishMin + " to stabilise");
         return string.Join("\n", warnings.ToArray());
     }
 
     private string BuildReport(TurnState turn, bool fedFish, int fishGraze, int snailGraze, int algaeGrowth)
     {
+        DifficultySettings settings = GetDifficultySettings();
+        int algae = CountSpecies(SpeciesType.Algae);
+        int fish = CountSpecies(SpeciesType.Fish);
+        int snails = CountSpecies(SpeciesType.Snail);
         StringBuilder b = new StringBuilder();
-        b.AppendLine(jarName + " - Day " + day + " Report");
-        b.AppendLine("You played 1 card.");
-        b.AppendLine("Cause and effect:");
-        if (selected.Count > 0) b.AppendLine("- " + selected[0].Name);
-        b.AppendLine(fedFish ? "Fish were fed this turn." : "Fish were not fed this turn.");
-        if (fishGraze > 0) b.AppendLine("Fish grazed on algae.");
-        if (snailGraze > 0) b.AppendLine("Snails cleaned extra algae.");
-        if (algaeGrowth > 0) b.AppendLine("Light and nitrates pushed algae growth.");
-        if (selected.Count > 0 && selected[0].Name == "Random Event") b.AppendLine("Event: " + lastRandomEventSummary);
+
+        b.AppendLine("Day " + day + " Report");
+        if (selected.Count > 0)
+            b.AppendLine("Played: " + selected[0].Name + " (" + selected[0].Tier + ")");
+        b.AppendLine("");
+
+        // What actually happened this turn
+        if (fedFish)
+            b.AppendLine("Fish fed — waste raised nitrates");
+        else
+            b.AppendLine("Fish not fed — they may graze algae");
+        if (fishGraze > 0)
+            b.AppendLine("Fish ate " + fishGraze + " algae (were hungry)");
+        if (snailGraze > 0)
+            b.AppendLine("Snails ate " + snailGraze + " algae");
+        if (algaeGrowth > 0)
+            b.AppendLine("Algae grew +" + algaeGrowth + " from light & nitrates");
+        else if (algaeGrowth < 0)
+            b.AppendLine("Algae fell " + algaeGrowth + " this turn");
+        if (selected.Count > 0 && selected[0].Name == "Random Event")
+            b.AppendLine("Event: " + lastRandomEventSummary);
         for (int i = 0; i < turn.Notes.Count && i < 3; i++) b.AppendLine(turn.Notes[i]);
-        if (!string.IsNullOrEmpty(latestMilestone) && latestMilestone != "No milestones yet.") b.AppendLine("Milestone: " + latestMilestone);
-        if (!string.IsNullOrEmpty(latestWarnings)) b.AppendLine("Warnings: " + latestWarnings.Replace("\n", ", "));
+
+        b.AppendLine("");
+        b.AppendLine("Jar now:");
+        b.AppendLine("Fish " + fish + "  Snails " + snails + "  Algae " + algae + " / " + settings.AlgaeWarning + " max");
+        b.AppendLine("Nitrates " + nitrateLevel.ToString("0") + " / " + settings.NitrateCollapse.ToString("0") + " (warn " + settings.NitrateWarning.ToString("0") + ")");
+        b.AppendLine("Stable days " + stableDays + " / " + settings.StableDaysToWin + " needed to win");
+
+        if (!string.IsNullOrEmpty(latestMilestone) && latestMilestone != "No milestones yet.")
+            b.AppendLine("Milestone: " + latestMilestone);
         return b.ToString();
     }
 
     private void RefreshHud()
     {
         DifficultySettings settings = GetDifficultySettings();
-        if (statsText != null) statsText.text = jarName + "\nDay: " + day + "\nDifficulty: " + difficulty + "\nStable Days: " + stableDays + " / " + settings.StableDaysToWin + "\nRerolls: " + rerollTokens + "\nDie Roll: " + currentDieRoll + "\nLight: " + lightLevel.ToString("0") + " / 100\nNitrates: " + nitrateLevel.ToString("0.0") + " / 100\nAlgae Warning: " + settings.AlgaeWarning + "\nStability: " + stability.ToString("0");
+
+        // Derive color hex codes based on current values
+        string nitrateHex = nitrateLevel >= settings.NitrateCollapse * 0.8f ? "#FF5555"
+            : nitrateLevel >= settings.NitrateWarning ? "#FFBB44" : "#88FFCC";
+        string stabilityHex = stability >= 65f ? "#88FFCC" : stability >= 36f ? "#FFEE66" : "#FF6666";
+        string stableHex = stableDays >= settings.StableDaysToWin * 0.7f ? "#66FF99"
+            : stableDays > 0 ? "#FFEE77" : "#AACCFF";
+
+        int algaeCount = CountSpecies(SpeciesType.Algae);
+        int fishCount = CountSpecies(SpeciesType.Fish);
+        int snailCount = CountSpecies(SpeciesType.Snail);
+        string algaeHex = algaeCount >= settings.AlgaeWarning ? "#FF8844" : algaeCount >= settings.AlgaeWarning * 0.7f ? "#FFDD66" : "#88FFCC";
+        string fishHex = fishCount < settings.StableFishMin ? "#FF8888" : "#88FFCC";
+        string snailHex = snailCount == 0 ? "#AAAAAA" : (algaeCount <= settings.SnailStarveThreshold ? "#FF8844" : "#88FFCC");
+        string lightHex = lightLevel >= 70f ? "#FFDD66" : lightLevel < 30f ? "#9999FF" : "#88FFCC";
+
+        if (statsText != null) statsText.text =
+            jarName + "  ·  " + difficulty + "\n\n"
+            + "<color=" + stableHex + ">Day  " + day + "      Stable  " + stableDays + " / " + settings.StableDaysToWin + "</color>\n\n"
+            + "<color=" + fishHex + ">Fish     " + fishCount + "</color>"
+            + "  <size=11><color=#999999>(need " + settings.StableFishMin + "+ to win)</color></size>\n"
+            + "<color=" + snailHex + ">Snails  " + snailCount + "</color>"
+            + (snailCount > 0 && algaeCount <= settings.SnailStarveThreshold
+                ? "  <size=11><color=#FF8844>starving!</color></size>\n"
+                : "\n")
+            + "<color=" + algaeHex + ">Algae   " + algaeCount + "</color>"
+            + "  <size=11><color=#999999>(bloom at " + settings.AlgaeWarning + ")</color></size>\n\n"
+            + "<color=" + lightHex + ">Light      " + lightLevel.ToString("0") + " / 100</color>"
+            + "  <size=11><color=#999999>(algae grows above 50)</color></size>\n"
+            + "<color=" + nitrateHex + ">Nitrates  " + nitrateLevel.ToString("0.0") + "</color>"
+            + "  <size=11><color=#999999>(warn " + settings.NitrateWarning.ToString("0") + " / bad " + settings.NitrateCollapse.ToString("0") + ")</color></size>\n"
+            + "<color=" + stabilityHex + ">Stability  " + stability.ToString("0") + "</color>"
+            + "  <size=11><color=#999999>(good above 65)</color></size>\n"
+            + "Re-rolls  " + rerollTokens;
+
+        // Update fill bars
+        if (stableProgressFill != null)
+        {
+            float stableFrac = settings.StableDaysToWin > 0 ? Mathf.Clamp01((float)stableDays / settings.StableDaysToWin) : 0f;
+            stableProgressFill.fillAmount = stableFrac;
+            stableProgressFill.color = Color.Lerp(new Color(0.44f, 0.7f, 0.56f, 0.8f), new Color(0.36f, 0.98f, 0.62f, 0.95f), stableFrac);
+        }
+        if (nitrateBarFill != null)
+        {
+            float nitrateFrac = Mathf.Clamp01(nitrateLevel / 100f);
+            nitrateBarFill.fillAmount = nitrateFrac;
+            nitrateBarFill.color = Color.Lerp(new Color(0.38f, 0.88f, 0.58f, 0.85f), new Color(0.96f, 0.3f, 0.24f, 0.92f), Mathf.Clamp01(nitrateFrac * 1.35f));
+        }
         if (warningText != null)
         {
             warningText.text = string.IsNullOrEmpty(latestWarnings) ? "Warnings\nStable for now." : "Warnings\n" + latestWarnings;
             warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.72f, 0.9f, 0.78f) : new Color(0.98f, 0.84f, 0.4f);
         }
-        if (eventText != null) eventText.text = "Dice\nCommon: always\nUncommon: " + settings.UncommonUnlockRoll + "+\nRare: " + settings.RareUnlockRoll + "+\nLast Event: " + lastRandomEventSummary;
+        if (eventText != null) eventText.text = "Common: any  ·  Uncommon: " + settings.UncommonUnlockRoll + "+  ·  Rare: " + settings.RareUnlockRoll + "+";
         if (selectedText != null) selectedText.text = BuildSelectedText();
         if (reportText != null) reportText.text = dayReport;
-        if (deckText != null) deckText.text = "Draw: " + drawPile.Count + "\nDiscard: " + discardPile.Count;
-        if (speciesText != null) speciesText.text = "Algae: " + CountSpecies(SpeciesType.Algae) + "\nSnails: " + CountSpecies(SpeciesType.Snail) + "\nFish: " + CountSpecies(SpeciesType.Fish);
+        if (deckText != null) deckText.text = "Draw " + drawPile.Count + "  ·  Discard " + discardPile.Count;
+        if (speciesText != null) speciesText.text = "Fish " + CountSpecies(SpeciesType.Fish) + "  Snails " + CountSpecies(SpeciesType.Snail) + "  Algae " + CountSpecies(SpeciesType.Algae);
         if (bannerText != null && state == GameState.Playing)
         {
-            bannerText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.13f, 0.2f, 0.16f) : new Color(0.3f, 0.25f, 0.08f);
+            bannerText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.88f, 0.96f, 0.9f) : new Color(1f, 0.88f, 0.44f);
         }
         RefreshCards();
     }
 
     private string BuildSelectedText()
     {
-        if (selected.Count == 0) return "Selected Card\nPick 1 unlocked card.\nRoll: " + currentDieRoll + "  Re-rolls: " + rerollTokens;
-        StringBuilder b = new StringBuilder();
-        b.AppendLine("Selected Card");
-        foreach (CardDef card in selected) b.AppendLine("- " + card.Name + " (" + card.Tier + ")");
-        return b.ToString();
+        if (selected.Count == 0) return "No card selected";
+        CardDef card = selected[0];
+        return ">  " + card.Name + "  (" + card.Tier + ")";
     }
 
     private void RefreshCards()
@@ -1629,7 +1813,9 @@ public class EcosystemController : MonoBehaviour
         }
 
         CardDef card = hand[index];
-        tooltipText.text = card.Name + "\nTier: " + card.Tier + "  Need: " + GetRequiredRoll(card) + "+\n" + card.Summary;
+        bool unlocked = IsCardPlayable(card);
+        string lockStr = unlocked ? "Unlocked  ·  Roll " + GetRequiredRoll(card) + "+" : "<color=#FF8888>Locked  ·  Requires roll " + GetRequiredRoll(card) + "+</color>";
+        tooltipText.text = "<b>" + card.Name + "</b>  [" + card.Tier + "]\n" + lockStr + "\n" + card.Summary;
         tooltipPanel.SetActive(true);
     }
 
@@ -1855,6 +2041,12 @@ public class EcosystemController : MonoBehaviour
         hoveredCardIndex = -1;
         animatingCardIndex = -1;
         animatingDrawCardIndex = -1;
+        nitrateBarFill = null;
+        stableProgressFill = null;
+        warningCardImage = null;
+        playButtonGlow = null;
+        pauseStatusText = null;
+        warningPulseTime = 0f;
     }
 
     private static Transform FindChildRecursive(Transform parent, string name)
@@ -2462,6 +2654,34 @@ public class EcosystemController : MonoBehaviour
             bubble.Transform.localPosition = position;
         }
     }
+
+    private void UpdateWarningPulse()
+    {
+        if (warningCardImage == null || state != GameState.Playing) return;
+        bool hasWarnings = !string.IsNullOrEmpty(latestWarnings)
+            && latestWarnings != "Roll unlocks which cards can be played this turn."
+            && latestWarnings != "You spent a re-roll token."
+            && latestWarnings != "Play 1 card before ending the day.";
+        warningPulseTime += Time.unscaledDeltaTime * (hasWarnings ? 2.4f : 0.8f);
+        float pulse = 0.5f + Mathf.Sin(warningPulseTime) * 0.5f;
+        float targetAlpha = hasWarnings ? Mathf.Lerp(0.82f, 1f, pulse) : 0.95f;
+        Color c = warningCardImage.color;
+        c.a = Mathf.Lerp(c.a, targetAlpha, Time.unscaledDeltaTime * 5f);
+        warningCardImage.color = c;
+    }
+
+    private void UpdatePlayButtonGlow()
+    {
+        if (playButtonGlow == null || state != GameState.Playing) return;
+        Image glowImage = playButtonGlow.GetComponent<Image>();
+        if (glowImage == null) return;
+        bool cardSelected = selected.Count > 0;
+        float targetAlpha = cardSelected ? 0.18f + Mathf.Sin(Time.unscaledTime * 3.8f) * 0.1f : 0f;
+        Color c = glowImage.color;
+        c.a = Mathf.Lerp(c.a, targetAlpha, Time.unscaledDeltaTime * 9f);
+        glowImage.color = c;
+    }
+
     private void EndGame(bool won, string message)
     {
         isPaused = false;

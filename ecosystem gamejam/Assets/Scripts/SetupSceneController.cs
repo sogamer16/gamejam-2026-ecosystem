@@ -14,6 +14,27 @@ public class SetupSceneController : MonoBehaviour
     private readonly string[] jars = { "Balanced", "HighNitrates", "SnailHeavy", "Overgrown", "Fragile" };
     private readonly string[] temperatures = { "Cold", "Warm", "Hot" };
 
+    private readonly string[] difficultyDescs =
+    {
+        "More re-rolls, forgiving thresholds. Good for learning the game.",
+        "The intended experience. Balanced pressure and rewards.",
+        "Tight margins and fewer re-rolls. One wrong card can cascade."
+    };
+    private readonly string[] jarDescs =
+    {
+        "A healthy starting mix. Good for first runs.",
+        "Elevated waste from the start. Manage nitrates quickly.",
+        "Packed with snails. Algae will run low fast.",
+        "Algae is thriving. Bloom risk is high from day one.",
+        "Minimal populations. The ecosystem is already fragile."
+    };
+    private readonly string[] temperatureDescs =
+    {
+        "Slower algae growth. Fish are sluggish but hardier.",
+        "A balanced water temperature.",
+        "Rapid algae growth and higher nitrate production."
+    };
+
     private int difficultyIndex = 1;
     private int jarIndex = 0;
     private int temperatureLevel = 1;
@@ -21,6 +42,9 @@ public class SetupSceneController : MonoBehaviour
     private TextMeshProUGUI difficultyValue;
     private TextMeshProUGUI jarValue;
     private TextMeshProUGUI temperatureValue;
+    private TextMeshProUGUI difficultyDesc;
+    private TextMeshProUGUI jarDesc;
+    private TextMeshProUGUI temperatureDesc;
 
     private void Awake()
     {
@@ -79,11 +103,11 @@ public class SetupSceneController : MonoBehaviour
         subtitle.color = new Color(0.23f, 0.33f, 0.4f);
 
         float top = -188f;
-        CreateControl(card.transform, "Difficulty", "How forgiving the ecosystem is.", top, ChangeDifficulty, out difficultyValue);
-        top -= 126f;
-        CreateControl(card.transform, "Starting Jar", "Pick the opening ecosystem condition.", top, ChangeJar, out jarValue);
-        top -= 126f;
-        CreateControl(card.transform, "Starting Temperature", "Initial water temperature.", top, ChangeTemperature, out temperatureValue);
+        CreateControl(card.transform, "Difficulty", top, ChangeDifficulty, out difficultyValue, out difficultyDesc);
+        top -= 134f;
+        CreateControl(card.transform, "Starting Jar", top, ChangeJar, out jarValue, out jarDesc);
+        top -= 134f;
+        CreateControl(card.transform, "Starting Temperature", top, ChangeTemperature, out temperatureValue, out temperatureDesc);
 
         TextMeshProUGUI hint = Label("Hint", card.transform, 18, FontStyles.Normal, TextAlignmentOptions.Center);
         Place(hint.rectTransform, new Vector2(0.1f, 0f), new Vector2(0.9f, 0f), new Vector2(0f, 132f), new Vector2(0f, 178f));
@@ -130,6 +154,11 @@ public class SetupSceneController : MonoBehaviour
         if (jarValue == null) jarValue = FindText(canvasObject.transform, "StartingJarValue");
         temperatureValue = FindText(canvasObject.transform, "Starting TemperatureValue");
         if (temperatureValue == null) temperatureValue = FindText(canvasObject.transform, "StartingTemperatureValue");
+        difficultyDesc = FindText(canvasObject.transform, "DifficultyDesc");
+        jarDesc = FindText(canvasObject.transform, "Starting JarDesc");
+        if (jarDesc == null) jarDesc = FindText(canvasObject.transform, "StartingJarDesc");
+        temperatureDesc = FindText(canvasObject.transform, "Starting TemperatureDesc");
+        if (temperatureDesc == null) temperatureDesc = FindText(canvasObject.transform, "StartingTemperatureDesc");
         RebindButton(canvasObject.transform, "-Button", () => ChangeDifficulty(-1), 0);
         RebindButton(canvasObject.transform, "+Button", () => ChangeDifficulty(1), 0);
         RebindButton(canvasObject.transform, "-Button", () => ChangeJar(-1), 1);
@@ -149,9 +178,12 @@ public class SetupSceneController : MonoBehaviour
 
     private void RefreshValues()
     {
-        difficultyValue.text = difficulties[difficultyIndex];
-        jarValue.text = jars[jarIndex];
-        temperatureValue.text = temperatures[temperatureLevel];
+        if (difficultyValue != null) difficultyValue.text = difficulties[difficultyIndex];
+        if (jarValue != null) jarValue.text = jars[jarIndex];
+        if (temperatureValue != null) temperatureValue.text = temperatures[temperatureLevel];
+        if (difficultyDesc != null) difficultyDesc.text = difficultyDescs[difficultyIndex];
+        if (jarDesc != null) jarDesc.text = jarDescs[jarIndex];
+        if (temperatureDesc != null) temperatureDesc.text = temperatureDescs[temperatureLevel];
     }
 
     private void StartGame()
@@ -160,31 +192,32 @@ public class SetupSceneController : MonoBehaviour
         SceneManager.LoadScene("SampleScene");
     }
 
-    private void CreateControl(Transform parent, string label, string hint, float top, Action<int> onAdjust, out TextMeshProUGUI valueText)
+    private void CreateControl(Transform parent, string label, float top, Action<int> onAdjust, out TextMeshProUGUI valueText, out TextMeshProUGUI descText)
     {
+        float boxHeight = 112f;
         GameObject box = Panel(label + "Box", parent, new Color(1f, 1f, 1f, 1f));
-        Place(box.GetComponent<RectTransform>(), new Vector2(0.08f, 1f), new Vector2(0.92f, 1f), new Vector2(0f, top), new Vector2(0f, top - 104f));
+        Place(box.GetComponent<RectTransform>(), new Vector2(0.08f, 1f), new Vector2(0.92f, 1f), new Vector2(0f, top), new Vector2(0f, top - boxHeight));
         UiThemeStyler.ApplyPanel(box.GetComponent<Image>(), ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.96f));
 
-        TextMeshProUGUI labelText = Label(label + "Label", box.transform, 22, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(labelText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -12f), new Vector2(-18f, -40f));
+        TextMeshProUGUI labelText = Label(label + "Label", box.transform, 20, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(labelText.rectTransform, new Vector2(0f, 1f), new Vector2(0.55f, 1f), new Vector2(18f, -10f), new Vector2(0f, -36f));
         labelText.text = label;
         labelText.color = new Color(0.11f, 0.17f, 0.22f);
 
-        TextMeshProUGUI hintText = Label(label + "Hint", box.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(hintText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -40f), new Vector2(-18f, -62f));
-        hintText.text = hint;
-        hintText.color = new Color(0.24f, 0.33f, 0.39f);
+        descText = Label(label + "Desc", box.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(descText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -38f), new Vector2(-18f, -72f));
+        descText.color = new Color(0.28f, 0.38f, 0.44f);
+        descText.textWrappingMode = TextWrappingModes.Normal;
 
         Button minus = CreateUiButton("-", box.transform, new Color(0.91f, 0.61f, 0.4f), delegate { onAdjust(-1); });
-        Place(minus.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 14f), new Vector2(78f, 56f));
+        Place(minus.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 12f), new Vector2(72f, 52f));
 
-        valueText = Label(label + "Value", box.transform, 22, FontStyles.Bold, TextAlignmentOptions.Center);
-        Place(valueText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(92f, 8f), new Vector2(-92f, 58f));
-        valueText.color = new Color(0.11f, 0.17f, 0.22f);
+        valueText = Label(label + "Value", box.transform, 20, FontStyles.Bold, TextAlignmentOptions.Center);
+        Place(valueText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(86f, 8f), new Vector2(-86f, 54f));
+        valueText.color = new Color(0.09f, 0.14f, 0.18f);
 
         Button plus = CreateUiButton("+", box.transform, new Color(0.42f, 0.76f, 0.95f), delegate { onAdjust(1); });
-        Place(plus.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-78f, 14f), new Vector2(-18f, 56f));
+        Place(plus.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-72f, 12f), new Vector2(-18f, 52f));
     }
 
     private static GameObject Panel(string name, Transform parent, Color color)
