@@ -187,8 +187,6 @@ public class SetupSceneController : MonoBehaviour
         rootLayout.childForceExpandWidth = true;
         rootLayout.childForceExpandHeight = false;
 
-        AddSetupBrandLogo(card.transform);
-
         GameObject header = CreateLayoutNode("Header", card.transform);
         SetLayout(header, preferredHeight: 150f);
         VerticalLayoutGroup headerLayout = header.AddComponent<VerticalLayoutGroup>();
@@ -244,36 +242,6 @@ public class SetupSceneController : MonoBehaviour
 
         Button playButton = CreateUiButton("Start Game", footer.transform, new Color(0.71f, 0.9f, 0.8f, 1f), StartGame);
         SetLayout(playButton.gameObject, preferredWidth: 280f, preferredHeight: 64f);
-    }
-
-    private void AddSetupBrandLogo(Transform parent)
-    {
-        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.9f, 0.96f, 0.93f, 0.96f));
-        LayoutElement layout = logoPlate.AddComponent<LayoutElement>();
-        layout.ignoreLayout = true;
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-256f, -154f), new Vector2(-24f, -22f));
-        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Medium, new Color(0.9f, 0.96f, 0.93f, 0.96f));
-
-        Outline outline = logoPlate.AddComponent<Outline>();
-        outline.effectColor = new Color(0.12f, 0.22f, 0.23f, 0.2f);
-        outline.effectDistance = new Vector2(3f, -3f);
-
-        Image logoImage = BrandLogoUtility.CreateLogoImage("BrandLogo", logoPlate.transform);
-        if (logoImage == null)
-        {
-            if (Application.isPlaying)
-            {
-                Destroy(logoPlate);
-            }
-            else
-            {
-                DestroyImmediate(logoPlate);
-            }
-
-            return;
-        }
-
-        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(10f, 10f), new Vector2(-10f, -10f));
     }
 
     private void ChangeDifficulty(int delta)

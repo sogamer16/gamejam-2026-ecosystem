@@ -18,6 +18,7 @@ public class OrganismView : MonoBehaviour
     private float baseVisualScale = 1f;
     private Color baseColor;
     private Quaternion visualRotationOffset = Quaternion.identity;
+    private MaterialPropertyBlock propertyBlock;
 
     public SpeciesType Species { get; private set; }
     public float Health { get; private set; }
@@ -180,23 +181,33 @@ public class OrganismView : MonoBehaviour
             return;
         }
 
+        if (propertyBlock == null)
+        {
+            propertyBlock = new MaterialPropertyBlock();
+        }
+
         Color faded = Color.Lerp(baseColor, new Color(0.78f, 0.8f, 0.78f, 1f), 1f - Health);
         for (int i = 0; i < renderers.Length; i++)
         {
             Renderer renderer = renderers[i];
-            if (renderer == null || renderer.material == null)
+            if (renderer == null)
             {
                 continue;
             }
 
-            if (renderer.material.HasProperty("_BaseColor"))
+            propertyBlock.Clear();
+            renderer.GetPropertyBlock(propertyBlock);
+            Material sharedMaterial = renderer.sharedMaterial;
+            if (sharedMaterial != null && sharedMaterial.HasProperty("_BaseColor"))
             {
-                renderer.material.SetColor("_BaseColor", faded);
+                propertyBlock.SetColor("_BaseColor", faded);
             }
-            else if (renderer.material.HasProperty("_Color"))
+            else if (sharedMaterial != null && sharedMaterial.HasProperty("_Color"))
             {
-                renderer.material.color = faded;
+                propertyBlock.SetColor("_Color", faded);
             }
+
+            renderer.SetPropertyBlock(propertyBlock);
         }
     }
 

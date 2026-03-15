@@ -40,6 +40,19 @@ public class EcosystemCardPrefabView : MonoBehaviour
 
         cachedRect = transform as RectTransform;
         cardUi = GetComponent<CardUI>();
+        if (cardUi == null)
+        {
+            cardUi = GetComponentInChildren<CardUI>(true);
+        }
+        if (cardUi == null)
+        {
+            EnsureTemplateCard();
+            cardUi = GetComponent<CardUI>();
+            if (cardUi == null)
+            {
+                cardUi = GetComponentInChildren<CardUI>(true);
+            }
+        }
 
         Canvas embeddedCanvas = GetComponent<Canvas>();
         if (embeddedCanvas != null)
@@ -71,6 +84,28 @@ public class EcosystemCardPrefabView : MonoBehaviour
         selectButton.colors = colors;
 
         CreateOverlays();
+    }
+
+    private void EnsureTemplateCard()
+    {
+        GameObject templatePrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
+        if (templatePrefab == null)
+        {
+            return;
+        }
+
+        GameObject templateInstance = Instantiate(templatePrefab, transform);
+        templateInstance.name = "CardTemplate";
+        RectTransform templateRect = templateInstance.GetComponent<RectTransform>();
+        if (templateRect != null)
+        {
+            templateRect.anchorMin = Vector2.zero;
+            templateRect.anchorMax = Vector2.one;
+            templateRect.offsetMin = Vector2.zero;
+            templateRect.offsetMax = Vector2.zero;
+            templateRect.localScale = Vector3.one;
+            templateRect.anchoredPosition = Vector2.zero;
+        }
     }
 
     public void SetCard(string title, string summary, string category, int requiredRoll, bool risk, Color accentColor, Sprite artSprite, Sprite shirtSprite, RarityType rarity, bool selected, bool interactable)

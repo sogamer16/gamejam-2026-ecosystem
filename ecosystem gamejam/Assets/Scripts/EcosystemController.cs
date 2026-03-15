@@ -21,6 +21,8 @@ public enum SpeciesType { Algae, Snail, Fish, Shrimp }
 public class EcosystemController : MonoBehaviour
 {
     private static EcosystemController runtimeInstance;
+    private static Sprite sharedWhiteSprite;
+    private static Texture2D sharedWhiteTexture;
     private enum GameState { Menu, Playing, Result }
     private enum DayPhase { AwaitingRoll, Rolling, AwaitingPlay, ResolvingTurn }
     private enum DifficultyMode { Easy, Medium, Hard }
@@ -188,6 +190,7 @@ public class EcosystemController : MonoBehaviour
     private int temperatureLevel;
     private int rerollTokens;
     private int currentDieRoll;
+    private int currentRollGain;
     private int fishHungryTurns;
     private int snailStarvingTurns;
     private int highNitrateDays;
@@ -463,14 +466,11 @@ public class EcosystemController : MonoBehaviour
             ConfigureExistingGameplayCanvas(existingCanvas.gameObject);
             if (BindExistingVisuals(existingCanvas.gameObject))
             {
-                EnsureGameplayBrandLogo(leftPanelRect);
                 return;
             }
 
-            canvas = existingCanvas;
-            return;
-
             ClearVisualCaches();
+            canvas = existingCanvas;
             if (Application.isPlaying)
             {
                 Destroy(existingCanvas.gameObject);
@@ -512,7 +512,6 @@ public class EcosystemController : MonoBehaviour
         Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -56f), new Vector2(-18f, -98f));
         desc.text = "Roll, play 1 unlocked card, then draw 1 replacement.";
         desc.color = new Color(0.29f, 0.38f, 0.37f);
-        EnsureGameplayBrandLogo(headerCardRect);
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
         Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -486f));
@@ -873,10 +872,13 @@ public class EcosystemController : MonoBehaviour
         RebindNamedButton(root, "Re-roll DieButton", RerollDie);
         RebindNamedButton(root, "PauseButton", TogglePause);
         RebindNamedButton(root, "ResumeButton", TogglePause);
+        RebindNamedButton(root, "Resume GameButton", TogglePause);
         RebindNamedButton(root, "Restart RunButton", RestartFromPause);
         RebindNamedButton(root, "QuitButton", QuitGame);
+        RebindNamedButton(root, "Quit to DesktopButton", QuitGame);
         RebindNamedButton(root, "Start PrototypeButton", StartGame);
         RebindNamedButton(root, "Play AgainButton", StartGame);
+        RebindNamedButton(root, "Change SettingsButton", GoToSetup);
     }
 
     private void CleanupLegacyUiObject(GameObject target)
@@ -932,62 +934,6 @@ public class EcosystemController : MonoBehaviour
 
         outline.effectColor = outlineColor;
         outline.effectDistance = new Vector2(2f, -2f);
-    }
-
-    private void EnsureGameplayBrandLogo(RectTransform parent)
-    {
-        if (parent == null)
-        {
-            return;
-        }
-
-        Transform searchRoot = parent.parent != null ? parent.parent : parent;
-        List<GameObject> existingPlates = new List<GameObject>();
-        Transform[] existingTransforms = searchRoot.GetComponentsInChildren<Transform>(true);
-        for (int i = 0; i < existingTransforms.Length; i++)
-        {
-            if (existingTransforms[i] != null && existingTransforms[i].name == "BrandLogoPlate")
-            {
-                existingPlates.Add(existingTransforms[i].gameObject);
-            }
-        }
-
-        for (int i = 0; i < existingPlates.Count; i++)
-        {
-            if (Application.isPlaying)
-            {
-                Destroy(existingPlates[i]);
-            }
-            else
-            {
-                DestroyImmediate(existingPlates[i]);
-            }
-        }
-
-        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.9f, 0.95f, 0.92f, 0.97f));
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(10f, -270f), new Vector2(-10f, -102f));
-        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Medium, new Color(0.9f, 0.95f, 0.92f, 0.97f));
-
-        Outline outline = logoPlate.AddComponent<Outline>();
-        outline.effectColor = new Color(0.11f, 0.21f, 0.19f, 0.24f);
-        outline.effectDistance = new Vector2(3f, -3f);
-
-        Image logoImage = BrandLogoUtility.CreateLogoImage("BrandLogo", logoPlate.transform);
-        if (logoImage == null)
-        {
-            if (Application.isPlaying)
-            {
-                Destroy(logoPlate);
-            }
-            else
-            {
-                DestroyImmediate(logoPlate);
-            }
-
-            return;
-        }
-
-        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(6f, 8f), new Vector2(-6f, -8f));
     }
 
     private void EnsurePauseButtonFrame(RectTransform parent, RectTransform pauseButtonRect)
@@ -1262,7 +1208,8 @@ public class EcosystemController : MonoBehaviour
         stableDays = 0;
         perfectDays = 0;
         rerollTokens = settings.StartRerolls;
-        currentDieRoll = 1;
+        currentDieRoll = 0;
+        currentRollGain = 0;
         fishHungryTurns = 0;
         snailStarvingTurns = 0;
         nitrateLevel = settings.StartNitrates;
@@ -1482,7 +1429,7 @@ public class EcosystemController : MonoBehaviour
 
     private void RollDie()
     {
-        currentDieRoll = UnityEngine.Random.Range(1, 7);
+        currentRollGain = UnityEngine.Random.Range(1, 7);
         RefreshDiceValueLabel();
     }
 
@@ -1495,7 +1442,7 @@ public class EcosystemController : MonoBehaviour
             yield break;
         }
 
-        currentDieRoll = 0;
+        currentRollGain = 0;
         RefreshDiceValueLabel();
 
         activeDie.localPosition = new Vector3(UnityEngine.Random.Range(-0.08f, 0.08f), 0.72f, UnityEngine.Random.Range(-0.08f, 0.08f));
@@ -1565,7 +1512,7 @@ public class EcosystemController : MonoBehaviour
         settledPosition.y = Mathf.Max(0.16f, settledPosition.y);
         activeDie.localPosition = settledPosition;
 
-        currentDieRoll = DetermineDieFaceValue();
+        currentRollGain = DetermineDieFaceValue();
         RefreshDiceValueLabel();
     }
 
@@ -1617,6 +1564,10 @@ public class EcosystemController : MonoBehaviour
         else
             unlockLine = "Points " + currentDieRoll + " — Common cards only  (need " + settings.UncommonUnlockRoll + " for Uncommon, " + settings.RareUnlockRoll + " for Rare)";
 
+        string rollLine = currentRollGain > 0
+            ? "Rolled +" + currentRollGain + " today. Unspent points carry into the next roll."
+            : "No points rolled yet.";
+
         string rerollLine = rerollTokens > 0
             ? rerollTokens + " re-roll" + (rerollTokens > 1 ? "s" : "") + " remaining — re-roll to try for more points."
             : "No re-rolls left this turn.";
@@ -1642,10 +1593,11 @@ public class EcosystemController : MonoBehaviour
 
         dayReport = jarName + "  ·  Day " + day + "\n\n"
             + unlockLine + "\n"
+            + rollLine + "\n"
             + rerollLine
             + (string.IsNullOrEmpty(stateHint) ? "" : "\n\nTip: " + stateHint);
 
-        if (bannerText != null) bannerText.text = "Day " + day + "  ·  Points " + currentDieRoll + "  ·  Select a card to play";
+        if (bannerText != null) bannerText.text = "Day " + day + "  ·  Points " + currentDieRoll + "  ·  Rolled +" + currentRollGain;
         RefreshHud();
     }
 
@@ -1677,6 +1629,8 @@ public class EcosystemController : MonoBehaviour
         CardDef guaranteed = DrawGuaranteedPlayableCard();
         if (guaranteed == null)
         {
+            currentDieRoll = Mathf.Max(currentDieRoll, GetLowestRequirementInHand());
+            latestWarnings = "Your roll was boosted so at least 1 card in hand stays playable.";
             return;
         }
 
@@ -1711,21 +1665,7 @@ public class EcosystemController : MonoBehaviour
             }
         }
 
-        List<CardDef> fallbackCards = new List<CardDef>();
-        for (int i = 0; i < deckTemplate.Count; i++)
-        {
-            if (GetRequiredRoll(deckTemplate[i]) <= currentDieRoll)
-            {
-                fallbackCards.Add(deckTemplate[i]);
-            }
-        }
-
-        if (fallbackCards.Count == 0)
-        {
-            return null;
-        }
-
-        return fallbackCards[UnityEngine.Random.Range(0, fallbackCards.Count)];
+        return null;
     }
 
     private int FindPlayableCardIndex(List<CardDef> source)
@@ -1763,6 +1703,17 @@ public class EcosystemController : MonoBehaviour
         }
 
         return bestIndex;
+    }
+
+    private int GetLowestRequirementInHand()
+    {
+        int lowestRequirement = int.MaxValue;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            lowestRequirement = Mathf.Min(lowestRequirement, GetRequiredRoll(hand[i]));
+        }
+
+        return lowestRequirement == int.MaxValue ? currentDieRoll : lowestRequirement;
     }
 
     private void ResolveRandomEvent(TurnState turn)
@@ -1855,11 +1806,12 @@ public class EcosystemController : MonoBehaviour
         ApplyAlgaeChange(turn.AlgaeBonus);
 
         ResolveSimulation(turn);
+        currentDieRoll = Mathf.Max(0, currentDieRoll - GetRequiredRoll(playedCard));
         hand.Remove(playedCard);
         discardPile.Add(playedCard);
         selected.Clear();
         hoveredCardIndex = -1;
-        currentDieRoll = 0;
+        currentRollGain = 0;
         RefreshDiceValueLabel();
         RefreshHud();
         if (state != GameState.Playing)
@@ -2107,7 +2059,7 @@ public class EcosystemController : MonoBehaviour
             warningText.text = string.IsNullOrEmpty(latestWarnings) ? "Warnings\nStable for now." : "Warnings\n" + latestWarnings;
             warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.19f, 0.42f, 0.29f) : new Color(0.53f, 0.31f, 0.1f);
         }
-        if (eventText != null) eventText.text = "Common: any  ·  Uncommon: " + settings.UncommonUnlockRoll + "+  ·  Rare: " + settings.RareUnlockRoll + "+";
+        if (eventText != null) eventText.text = "Roll bank: +" + currentRollGain + " today  ·  Common: 1  ·  Uncommon: " + settings.UncommonUnlockRoll + "  ·  Rare: " + settings.RareUnlockRoll;
         if (selectedText != null) selectedText.text = BuildSelectedText();
         if (reportText != null) reportText.text = dayReport;
         if (deckText != null) deckText.text = "Draw " + drawPile.Count + "  ·  Discard " + discardPile.Count;
@@ -2124,7 +2076,7 @@ public class EcosystemController : MonoBehaviour
     {
         if (selected.Count == 0) return "No card selected";
         CardDef card = selected[0];
-        return ">  " + card.Name + "  (" + card.Tier + ")";
+        return ">  " + card.Name + "  (" + GetRequiredRoll(card) + " pts)";
     }
 
     private void RefreshCards()
@@ -2253,7 +2205,7 @@ public class EcosystemController : MonoBehaviour
 
         CardDef card = hand[index];
         bool unlocked = IsCardPlayable(card);
-        string lockStr = unlocked ? "Unlocked  ·  " + GetRequiredRoll(card) + "+ points" : "<color=#FF8888>Locked  ·  Requires " + GetRequiredRoll(card) + "+ points</color>";
+        string lockStr = unlocked ? "Playable  ·  Costs " + GetRequiredRoll(card) + " points" : "<color=#FF8888>Locked  ·  Costs " + GetRequiredRoll(card) + " points</color>";
         tooltipText.text = "<b>" + card.Name + "</b>  [" + card.Tier + "]\n" + lockStr + "\n" + card.Summary;
         tooltipPanel.SetActive(true);
     }
@@ -2926,23 +2878,12 @@ public class EcosystemController : MonoBehaviour
 
     private void LoadDicePrefab()
     {
-        if (dicePrefab != null && diceMesh != null)
+        if (diceMesh != null)
         {
             return;
         }
 
-#if UNITY_EDITOR
-        dicePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Collection Dice set for role-playing games/Prefabs/Dice_d6.prefab");
-        UnityEngine.Object[] meshAssets = AssetDatabase.LoadAllAssetsAtPath("Assets/Collection Dice set for role-playing games/Dice_d6/Meshes/Dice_d6.fbx");
-        for (int i = 0; i < meshAssets.Length; i++)
-        {
-            if (meshAssets[i] is Mesh mesh && mesh.name.IndexOf("Dice_d6", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                diceMesh = mesh;
-                break;
-            }
-        }
-#endif
+        diceMesh = GetBuiltinCubeMesh();
     }
 
     private void EnsureJarWorld()
@@ -3335,15 +3276,15 @@ public class EcosystemController : MonoBehaviour
     private void BeginRollPhase()
     {
         dayPhase = DayPhase.AwaitingRoll;
-        currentDieRoll = 0;
+        currentRollGain = 0;
         RefreshDiceValueLabel();
         selected.Clear();
         hoveredCardIndex = -1;
         latestWarnings = "Look down and roll the die to earn today's card points.";
-        dayReport = jarName + "  ·  Day " + day + "\n\nRoll the die to " + (day == 1 ? "draw your opening 3-card hand." : "replenish 1 card for the new day.") + "\nYour roll becomes the points used to unlock cards.\nTemperature: " + TemperatureLabel();
+        dayReport = jarName + "  ·  Day " + day + "\n\nRoll the die to " + (day == 1 ? "draw your opening 3-card hand." : "replenish 1 card for the new day.") + "\nYour roll adds to your saved points, and unused points carry forward.\nCurrent bank: " + currentDieRoll + "\nTemperature: " + TemperatureLabel();
         if (bannerText != null)
         {
-            bannerText.text = "Day " + day + "  ·  Roll the die for points";
+            bannerText.text = "Day " + day + "  ·  Bank " + currentDieRoll + "  ·  Roll for more";
         }
         RefreshHud();
     }
@@ -3356,6 +3297,7 @@ public class EcosystemController : MonoBehaviour
         }
 
         dayPhase = DayPhase.Rolling;
+        int previousRollGain = currentRollGain;
         latestWarnings = isReroll ? "Re-rolling the die..." : "Rolling the die...";
         RefreshHud();
 
@@ -3363,6 +3305,15 @@ public class EcosystemController : MonoBehaviour
         EnsureDiceActor();
         EnsureDiceValueLabel();
         yield return RollDiePhysicsRoutine();
+
+        if (isReroll)
+        {
+            currentDieRoll = Mathf.Max(0, currentDieRoll - previousRollGain) + currentRollGain;
+        }
+        else
+        {
+            currentDieRoll += currentRollGain;
+        }
 
         if (!isReroll)
         {
@@ -3457,6 +3408,27 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
+        Renderer[] renderers = dieObject.GetComponentsInChildren<Renderer>(true);
+        bool needsFallbackMaterial = false;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] == null)
+            {
+                continue;
+            }
+
+            if (renderers[i].sharedMaterial == null)
+            {
+                needsFallbackMaterial = true;
+                break;
+            }
+        }
+
+        if (!needsFallbackMaterial)
+        {
+            return;
+        }
+
         if (diceDisplayMaterial == null)
         {
             diceDisplayMaterial = BuildDiceDisplayMaterial();
@@ -3467,10 +3439,9 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
-        Renderer[] renderers = dieObject.GetComponentsInChildren<Renderer>(true);
         for (int i = 0; i < renderers.Length; i++)
         {
-            if (renderers[i] != null)
+            if (renderers[i] != null && renderers[i].sharedMaterial == null)
             {
                 renderers[i].sharedMaterial = diceDisplayMaterial;
             }
@@ -3689,53 +3660,47 @@ public class EcosystemController : MonoBehaviour
 
     private Material BuildDiceDisplayMaterial()
     {
-#if UNITY_EDITOR
-        Texture2D albedo = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Collection Dice set for role-playing games/Dice_d6/Textures/2k/Plastic Glossy Pure write/Dice_d6_Albedo.png");
-        Texture2D normal = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Collection Dice set for role-playing games/Dice_d6/Textures/2k/Plastic Glossy Pure write/Dice_d6_Normal.png");
-        Texture2D metallic = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Collection Dice set for role-playing games/Dice_d6/Textures/2k/Plastic Glossy Pure write/Dice_d6_Metallic.png");
-        Texture2D occlusion = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Collection Dice set for role-playing games/Dice_d6/Textures/2k/Plastic Glossy Pure write/Dice_d6_AO.png");
-
         Shader shader = Shader.Find("Universal Render Pipeline/Lit");
         if (shader == null)
         {
             shader = Shader.Find("Standard");
         }
 
-        if (shader == null || albedo == null)
+        if (shader == null)
         {
             return null;
         }
 
         Material material = new Material(shader);
         material.name = "RuntimeDiceDisplayMaterial";
-
-        if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", albedo);
-        if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", albedo);
         if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
         if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
-
-        if (normal != null && material.HasProperty("_BumpMap"))
-        {
-            material.EnableKeyword("_NORMALMAP");
-            material.SetTexture("_BumpMap", normal);
-            if (material.HasProperty("_BumpScale")) material.SetFloat("_BumpScale", 1f);
-        }
-
-        if (metallic != null && material.HasProperty("_MetallicGlossMap"))
-        {
-            material.SetTexture("_MetallicGlossMap", metallic);
-            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.2f);
-        }
-
-        if (occlusion != null && material.HasProperty("_OcclusionMap"))
-        {
-            material.SetTexture("_OcclusionMap", occlusion);
-        }
+        if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.18f);
+        if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.78f);
+        if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.78f);
 
         return material;
-#else
-        return null;
-#endif
+    }
+
+    private static Mesh GetBuiltinCubeMesh()
+    {
+        GameObject tempCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        try
+        {
+            MeshFilter meshFilter = tempCube.GetComponent<MeshFilter>();
+            return meshFilter != null ? meshFilter.sharedMesh : null;
+        }
+        finally
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(tempCube);
+            }
+            else
+            {
+                DestroyImmediate(tempCube);
+            }
+        }
     }
 
     private void CacheExistingDie()
@@ -3805,8 +3770,8 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
-        bool hasRoll = currentDieRoll > 0;
-        diceValueText.text = hasRoll ? currentDieRoll.ToString() : "?";
+        bool hasRoll = currentRollGain > 0;
+        diceValueText.text = hasRoll ? currentRollGain.ToString() : "?";
         diceValueText.alpha = hasRoll ? 1f : 0.55f;
     }
 
@@ -4058,14 +4023,25 @@ public class EcosystemController : MonoBehaviour
 
     private Sprite CreateWhiteSprite()
     {
-        Texture2D tex = new Texture2D(1, 1);
-        tex.SetPixel(0, 0, Color.white);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f));
+        if (sharedWhiteSprite != null)
+        {
+            return sharedWhiteSprite;
+        }
+
+        sharedWhiteTexture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+        sharedWhiteTexture.name = "EcosystemWhiteTexture";
+        sharedWhiteTexture.hideFlags = HideFlags.HideAndDontSave;
+        sharedWhiteTexture.SetPixel(0, 0, Color.white);
+        sharedWhiteTexture.Apply();
+
+        sharedWhiteSprite = Sprite.Create(sharedWhiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f));
+        sharedWhiteSprite.name = "EcosystemWhiteSprite";
+        sharedWhiteSprite.hideFlags = HideFlags.HideAndDontSave;
+        return sharedWhiteSprite;
     }
 
     private static GameObject Panel(string name, Transform parent, Color color) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); Image img = go.AddComponent<Image>(); img.color = color; return go; }
-    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = CreateButtonObject(text, parent, color); Button b = go.GetComponent<Button>() ?? go.AddComponent<Button>(); ColorBlock cb = b.colors; cb.highlightedColor = Color.white; cb.pressedColor = Color.white; b.colors = cb; b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); UiThemeStyler.ApplyButton(b, GetButtonKind(text), t); return b; }
+    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = CreateButtonObject(text, parent, color); Button b = go.GetComponent<Button>() ?? go.AddComponent<Button>(); Image image = go.GetComponent<Image>(); if (image != null) b.targetGraphic = image; ColorBlock cb = b.colors; cb.highlightedColor = Color.white; cb.pressedColor = Color.white; b.colors = cb; b.onClick.RemoveAllListeners(); b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); UiThemeStyler.ApplyButton(b, GetButtonKind(text), t); return b; }
     private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions alignment) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); TextMeshProUGUI t = go.AddComponent<TextMeshProUGUI>(); t.font = TmpFontUtility.GetFont(); t.fontSize = size; t.fontStyle = style; t.alignment = alignment; t.textWrappingMode = TextWrappingModes.Normal; t.overflowMode = TextOverflowModes.Overflow; return t; }
     private static void Stretch(RectTransform rt) { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
     private static void Place(RectTransform rt, Vector2 min, Vector2 max, Vector2 offMin, Vector2 offMax) { rt.anchorMin = min; rt.anchorMax = max; rt.offsetMin = offMin; rt.offsetMax = offMax; }
@@ -4097,9 +4073,12 @@ public class EcosystemController : MonoBehaviour
         ApplyButtonTheme(root, "Re-roll DieButton", ThemeButtonKind.Secondary);
         ApplyButtonTheme(root, "PauseButton", ThemeButtonKind.Secondary);
         ApplyButtonTheme(root, "ResumeButton", ThemeButtonKind.Primary);
+        ApplyButtonTheme(root, "Resume GameButton", ThemeButtonKind.Primary);
         ApplyButtonTheme(root, "Restart RunButton", ThemeButtonKind.Danger);
         ApplyButtonTheme(root, "QuitButton", ThemeButtonKind.Danger);
+        ApplyButtonTheme(root, "Quit to DesktopButton", ThemeButtonKind.Danger);
         ApplyButtonTheme(root, "Play AgainButton", ThemeButtonKind.Start);
+        ApplyButtonTheme(root, "Change SettingsButton", ThemeButtonKind.Secondary);
     }
 
     private static void ApplyPanelTheme(Transform root, string name, ThemePanelKind kind, Color tint)
