@@ -13,7 +13,9 @@ namespace NueGames.NueDeck.Editor
         [OnOpenAsset]
         public static bool OpenEditor(int instanceId, int line)
         {
+#pragma warning disable CS0618
             CardData obj = EditorUtility.InstanceIDToObject(instanceId) as CardData;
+#pragma warning restore CS0618
             if (obj != null)
             {
                 CardEditorWindow.OpenCardEditor(obj);
