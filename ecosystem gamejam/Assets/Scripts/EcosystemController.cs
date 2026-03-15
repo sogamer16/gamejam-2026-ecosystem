@@ -140,6 +140,7 @@ public class EcosystemController : MonoBehaviour
     private Renderer jarWaterRenderer;
     private Light tableKeyLight;
     private Light jarFillLight;
+    private RectTransform leftPanelRect;
     private RectTransform rightPanelRect;
     private RectTransform drawPileMarker;
     private RectTransform discardPileMarker;
@@ -370,7 +371,7 @@ public class EcosystemController : MonoBehaviour
         {
             if (BindExistingVisuals(existingCanvas.gameObject))
             {
-                EnsureGameplayBrandLogo(rightPanelRect);
+                EnsureGameplayBrandLogo(leftPanelRect);
                 return;
             }
 
@@ -406,22 +407,25 @@ public class EcosystemController : MonoBehaviour
 
         GameObject left = Panel("Left", canvas.transform, new Color(0.05f, 0.08f, 0.09f, 0.6f));
         Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.15f, 1f), Vector2.zero, Vector2.zero);
-        TextMeshProUGUI title = Label("Title", left.transform, 30, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        leftPanelRect = left.GetComponent<RectTransform>();
+        RectTransform headerCardRect = EnsureLeftHudHeaderCard(left.transform);
+        TextMeshProUGUI title = Label("Title", headerCardRect.transform, 30, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -18f), new Vector2(-18f, -58f));
         title.text = "Glass World";
-        title.color = Color.white;
-        TextMeshProUGUI desc = Label("Desc", left.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        title.color = new Color(0.12f, 0.2f, 0.19f);
+        TextMeshProUGUI desc = Label("Desc", headerCardRect.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -66f), new Vector2(-18f, -118f));
         desc.text = "Roll 1d6 each day to earn points. Play 1 unlocked card, then draw 1 replacement.";
-        desc.color = new Color(0.83f, 0.91f, 0.87f);
+        desc.color = new Color(0.29f, 0.38f, 0.37f);
+        EnsureGameplayBrandLogo(headerCardRect);
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
-        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -132f), new Vector2(-14f, -338f));
-        UiThemeStyler.ApplyPanel(statsCard.GetComponent<Image>(), ThemePanelKind.Medium, new Color(1f, 1f, 1f, 0.92f));
-        statsText = Label("Stats", left.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -208f), new Vector2(-14f, -414f));
+        StyleLeftHudCard(statsCard, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
+        statsText = Label("Stats", statsCard.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         statsText.richText = true;
-        Place(statsText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -144f), new Vector2(-22f, -330f));
-        statsText.color = Color.white;
+        Place(statsText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16f, 14f), new Vector2(-16f, -42f));
+        statsText.color = new Color(0.16f, 0.21f, 0.2f);
 
         // Stable days progress bar (inside stats card, pinned to bottom)
         GameObject stableBarTrack = Panel("StableBarTrack", statsCard.transform, new Color(0f, 0f, 0f, 0.28f));
@@ -450,24 +454,24 @@ public class EcosystemController : MonoBehaviour
         nitrateBarFill = nitrateFillImg;
 
         GameObject warningCard = Panel("WarningCard", left.transform, new Color(1f, 0.84f, 0.3f, 0.06f));
-        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -350f), new Vector2(-14f, -460f));
-        UiThemeStyler.ApplyPanel(warningCard.GetComponent<Image>(), ThemePanelKind.Notice, new Color(1f, 1f, 1f, 0.95f));
+        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -426f), new Vector2(-14f, -536f));
+        StyleLeftHudCard(warningCard, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
         warningCardImage = warningCard.GetComponent<Image>();
-        warningText = Label("Warnings", left.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -358f), new Vector2(-22f, -412f));
-        warningText.color = new Color(0.98f, 0.84f, 0.4f);
-        eventText = Label("Event", left.transform, 12, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(eventText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -416f), new Vector2(-22f, -452f));
-        eventText.color = new Color(0.84f, 0.9f, 0.95f);
-        selectedText = Label("Selected", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(selectedText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -458f), new Vector2(-22f, -500f));
-        selectedText.color = new Color(0.88f, 0.95f, 0.9f);
+        warningText = Label("Warnings", warningCard.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -14f), new Vector2(-16f, -60f));
+        warningText.color = new Color(0.46f, 0.26f, 0.1f);
+        eventText = Label("Event", warningCard.transform, 12, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(eventText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 28f), new Vector2(-16f, 50f));
+        eventText.color = new Color(0.28f, 0.34f, 0.35f);
+        selectedText = Label("Selected", warningCard.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(selectedText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 8f), new Vector2(-16f, 26f));
+        selectedText.color = new Color(0.22f, 0.32f, 0.29f);
         GameObject reportCard = Panel("ReportCard", left.transform, new Color(1f, 1f, 1f, 0.04f));
         Place(reportCard.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 172f));
-        UiThemeStyler.ApplyPanel(reportCard.GetComponent<Image>(), ThemePanelKind.Small, new Color(1f, 1f, 1f, 0.9f));
-        reportText = Label("Report", left.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(reportText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(22f, 22f), new Vector2(-22f, 164f));
-        reportText.color = new Color(0.84f, 0.92f, 0.88f);
+        StyleLeftHudCard(reportCard, ThemePanelKind.Small, new Color(0.97f, 0.99f, 0.98f, 0.95f), new Color(0.12f, 0.2f, 0.19f, 0.12f));
+        reportText = Label("Report", reportCard.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        Place(reportText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16f, 12f), new Vector2(-16f, -12f));
+        reportText.color = new Color(0.22f, 0.29f, 0.29f);
 
         playButtonGlow = Panel("PlayButtonGlow", left.transform, new Color(0.38f, 0.94f, 0.62f, 0f));
         Place(playButtonGlow.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(12f, 180f), new Vector2(-12f, 240f));
@@ -502,8 +506,6 @@ public class EcosystemController : MonoBehaviour
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
         Button pauseButton = CreateUiButton("Pause", right.transform, new Color(0.82f, 0.84f, 0.74f), TogglePause);
         Place(pauseButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-118f, -18f), new Vector2(-24f, -54f));
-        EnsureGameplayBrandLogo(rightPanelRect);
-
         water = null;
         lightGlow = null;
         playFlash = null;
@@ -618,6 +620,7 @@ public class EcosystemController : MonoBehaviour
     {
         ClearVisualCaches();
         canvas = canvasObject.GetComponent<Canvas>();
+        leftPanelRect = FindRect(canvasObject.transform, "Left");
         rightPanelRect = FindRect(canvasObject.transform, "Right");
         RectTransform legacyJar = FindRect(canvasObject.transform, "Jar");
         if (legacyJar != null)
@@ -661,7 +664,7 @@ public class EcosystemController : MonoBehaviour
         primaryActionButton = FindObject(canvasObject.transform, "Play Selected CardButton")?.GetComponent<Button>();
         rerollButton = FindObject(canvasObject.transform, "Re-roll DieButton")?.GetComponent<Button>();
 
-        if (canvas == null || rightPanelRect == null || bannerText == null || resultPanel == null || pausePanel == null)
+        if (canvas == null || leftPanelRect == null || rightPanelRect == null || bannerText == null || resultPanel == null || pausePanel == null)
         {
             return false;
         }
@@ -674,6 +677,77 @@ public class EcosystemController : MonoBehaviour
         if (rightImage != null) rightImage.color = new Color(0.2f, 0.3f, 0.24f, 0.005f);
         Image leftImage = FindImage(canvasObject.transform, "Left");
         if (leftImage != null) leftImage.color = new Color(0.06f, 0.1f, 0.1f, 0.78f);
+        RectTransform headerCardRect = EnsureLeftHudHeaderCard(leftPanelRect);
+        TextMeshProUGUI title = FindText(canvasObject.transform, "Title");
+        if (title != null)
+        {
+            title.rectTransform.SetParent(headerCardRect, false);
+            Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -18f), new Vector2(-18f, -58f));
+            title.color = new Color(0.12f, 0.2f, 0.19f);
+        }
+        TextMeshProUGUI desc = FindText(canvasObject.transform, "Desc");
+        if (desc != null)
+        {
+            desc.rectTransform.SetParent(headerCardRect, false);
+            Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -66f), new Vector2(-18f, -118f));
+            desc.color = new Color(0.29f, 0.38f, 0.37f);
+        }
+        EnsureGameplayBrandLogo(headerCardRect);
+        RectTransform statsCardRect = FindRect(canvasObject.transform, "StatsCard");
+        if (statsCardRect != null)
+        {
+            Place(statsCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -208f), new Vector2(-14f, -414f));
+            StyleLeftHudCard(statsCardRect.gameObject, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
+        }
+        RectTransform statsRect = FindRect(canvasObject.transform, "Stats");
+        if (statsRect != null)
+        {
+            if (statsCardRect != null) statsRect.SetParent(statsCardRect, false);
+            Place(statsRect, Vector2.zero, Vector2.one, new Vector2(16f, 14f), new Vector2(-16f, -42f));
+            TextMeshProUGUI stats = statsRect.GetComponent<TextMeshProUGUI>();
+            if (stats != null) stats.color = new Color(0.16f, 0.21f, 0.2f);
+        }
+        RectTransform warningCardRect = FindRect(canvasObject.transform, "WarningCard");
+        if (warningCardRect != null)
+        {
+            Place(warningCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -426f), new Vector2(-14f, -536f));
+            StyleLeftHudCard(warningCardRect.gameObject, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
+        }
+        RectTransform warningRect = FindRect(canvasObject.transform, "Warnings");
+        if (warningRect != null)
+        {
+            if (warningCardRect != null) warningRect.SetParent(warningCardRect, false);
+            Place(warningRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -14f), new Vector2(-16f, -60f));
+        }
+        RectTransform eventRect = FindRect(canvasObject.transform, "Event");
+        if (eventRect != null)
+        {
+            if (warningCardRect != null) eventRect.SetParent(warningCardRect, false);
+            Place(eventRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 28f), new Vector2(-16f, 50f));
+            TextMeshProUGUI eventLabel = eventRect.GetComponent<TextMeshProUGUI>();
+            if (eventLabel != null) eventLabel.color = new Color(0.28f, 0.34f, 0.35f);
+        }
+        RectTransform selectedRect = FindRect(canvasObject.transform, "Selected");
+        if (selectedRect != null)
+        {
+            if (warningCardRect != null) selectedRect.SetParent(warningCardRect, false);
+            Place(selectedRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 8f), new Vector2(-16f, 26f));
+            TextMeshProUGUI selectedLabel = selectedRect.GetComponent<TextMeshProUGUI>();
+            if (selectedLabel != null) selectedLabel.color = new Color(0.22f, 0.32f, 0.29f);
+        }
+        RectTransform reportCardRect = FindRect(canvasObject.transform, "ReportCard");
+        if (reportCardRect != null)
+        {
+            StyleLeftHudCard(reportCardRect.gameObject, ThemePanelKind.Small, new Color(0.97f, 0.99f, 0.98f, 0.95f), new Color(0.12f, 0.2f, 0.19f, 0.12f));
+        }
+        RectTransform reportRect = FindRect(canvasObject.transform, "Report");
+        if (reportRect != null)
+        {
+            if (reportCardRect != null) reportRect.SetParent(reportCardRect, false);
+            Place(reportRect, Vector2.zero, Vector2.one, new Vector2(16f, 12f), new Vector2(-16f, -12f));
+            TextMeshProUGUI reportLabel = reportRect.GetComponent<TextMeshProUGUI>();
+            if (reportLabel != null) reportLabel.color = new Color(0.22f, 0.29f, 0.29f);
+        }
         for (int i = 0; i < 3; i++)
         {
             RectTransform slotRect = FindRect(canvasObject.transform, "Card" + i);
@@ -743,6 +817,43 @@ public class EcosystemController : MonoBehaviour
         target.name = "__LegacyHidden__" + target.name;
     }
 
+    private RectTransform EnsureLeftHudHeaderCard(Transform leftRoot)
+    {
+        RectTransform headerCardRect = FindRect(leftRoot, "HeaderCard");
+        if (headerCardRect == null)
+        {
+            GameObject headerCard = Panel("HeaderCard", leftRoot, new Color(1f, 1f, 1f, 0.08f));
+            headerCardRect = headerCard.GetComponent<RectTransform>();
+        }
+
+        Place(headerCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -14f), new Vector2(-14f, -194f));
+        StyleLeftHudCard(headerCardRect.gameObject, ThemePanelKind.Medium, new Color(0.97f, 0.99f, 0.97f, 0.97f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
+        return headerCardRect;
+    }
+
+    private static void StyleLeftHudCard(GameObject card, ThemePanelKind kind, Color tint, Color outlineColor)
+    {
+        if (card == null)
+        {
+            return;
+        }
+
+        Image image = card.GetComponent<Image>();
+        if (image != null)
+        {
+            UiThemeStyler.ApplyPanel(image, kind, tint);
+        }
+
+        Outline outline = card.GetComponent<Outline>();
+        if (outline == null)
+        {
+            outline = card.AddComponent<Outline>();
+        }
+
+        outline.effectColor = outlineColor;
+        outline.effectDistance = new Vector2(2f, -2f);
+    }
+
     private void EnsureGameplayBrandLogo(RectTransform parent)
     {
         if (parent == null)
@@ -750,8 +861,9 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
-        GameObject existingPlate = FindObject(parent, "BrandLogoPlate");
-        if (existingPlate != null)
+        Transform searchRoot = parent.parent != null ? parent.parent : parent;
+        GameObject existingPlate = FindObject(searchRoot, "BrandLogoPlate");
+        while (existingPlate != null)
         {
             if (Application.isPlaying)
             {
@@ -761,10 +873,12 @@ public class EcosystemController : MonoBehaviour
             {
                 DestroyImmediate(existingPlate);
             }
+
+            existingPlate = FindObject(searchRoot, "BrandLogoPlate");
         }
 
         GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.94f, 0.98f, 0.96f, 0.9f));
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-244f, -18f), new Vector2(-132f, -84f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -126f), new Vector2(-14f, -194f));
         UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.94f, 0.98f, 0.96f, 0.9f));
 
         Outline outline = logoPlate.AddComponent<Outline>();
@@ -1705,25 +1819,26 @@ public class EcosystemController : MonoBehaviour
         string fishHex = fishCount < settings.StableFishMin ? "#FF8888" : "#88FFCC";
         string snailHex = snailCount == 0 ? "#AAAAAA" : (algaeCount <= settings.SnailStarveThreshold ? "#FF8844" : "#88FFCC");
         string lightHex = lightLevel >= 70f ? "#FFDD66" : lightLevel < 30f ? "#9999FF" : "#88FFCC";
+        const string helperHex = "#5B635F";
 
         if (statsText != null) statsText.text =
             jarName + "  ·  " + difficulty + "\n\n"
             + "<color=" + stableHex + ">Day  " + day + "      Stable  " + stableDays + " / " + settings.StableDaysToWin + "</color>\n\n"
             + "<color=" + fishHex + ">Fish     " + fishCount + "</color>"
-            + "  <size=11><color=#999999>(need " + settings.StableFishMin + "+ to win)</color></size>\n"
+            + "  <size=11><color=" + helperHex + ">(need " + settings.StableFishMin + "+ to win)</color></size>\n"
             + "<color=" + snailHex + ">Snails  " + snailCount + "</color>"
             + (snailCount > 0 && algaeCount <= settings.SnailStarveThreshold
                 ? "  <size=11><color=#FF8844>starving!</color></size>\n"
                 : "\n")
             + "<color=" + algaeHex + ">Algae   " + algaeCount + "</color>"
-            + "  <size=11><color=#999999>(bloom at " + settings.AlgaeWarning + ")</color></size>\n\n"
+            + "  <size=11><color=" + helperHex + ">(bloom at " + settings.AlgaeWarning + ")</color></size>\n\n"
             + "<color=" + lightHex + ">Light      " + lightLevel.ToString("0") + " / 100</color>"
-            + "  <size=11><color=#999999>(algae grows above 50)</color></size>\n"
+            + "  <size=11><color=" + helperHex + ">(algae grows above 50)</color></size>\n"
             + "<color=" + nitrateHex + ">Nitrates  " + nitrateLevel.ToString("0.0") + "</color>"
-            + "  <size=11><color=#999999>(warn " + settings.NitrateWarning.ToString("0") + " / bad " + settings.NitrateCollapse.ToString("0") + ")</color></size>\n"
+            + "  <size=11><color=" + helperHex + ">(warn " + settings.NitrateWarning.ToString("0") + " / bad " + settings.NitrateCollapse.ToString("0") + ")</color></size>\n"
             + "<color=" + stabilityHex + ">Stability  " + stability.ToString("0") + "</color>"
-            + "  <size=11><color=#999999>(good above 65)</color></size>\n"
-            + "Points  " + (currentDieRoll > 0 ? currentDieRoll.ToString() : "-");
+            + "  <size=11><color=" + helperHex + ">(good above 65)</color></size>\n"
+            + "<color=#233433>Points  " + (currentDieRoll > 0 ? currentDieRoll.ToString() : "-") + "</color>";
 
         // Update fill bars
         if (stableProgressFill != null)
@@ -1741,7 +1856,7 @@ public class EcosystemController : MonoBehaviour
         if (warningText != null)
         {
             warningText.text = string.IsNullOrEmpty(latestWarnings) ? "Warnings\nStable for now." : "Warnings\n" + latestWarnings;
-            warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.72f, 0.9f, 0.78f) : new Color(0.98f, 0.84f, 0.4f);
+            warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.19f, 0.42f, 0.29f) : new Color(0.53f, 0.31f, 0.1f);
         }
         if (eventText != null) eventText.text = "Common: any  ·  Uncommon: " + settings.UncommonUnlockRoll + "+  ·  Rare: " + settings.RareUnlockRoll + "+";
         if (selectedText != null) selectedText.text = BuildSelectedText();

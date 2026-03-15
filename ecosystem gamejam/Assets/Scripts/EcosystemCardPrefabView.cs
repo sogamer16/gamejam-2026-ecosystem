@@ -88,15 +88,27 @@ public class EcosystemCardPrefabView : MonoBehaviour
         {
             nameText.text = title;
             nameText.color = new Color(0.17f, 0.11f, 0.08f);
+            nameText.fontSize = 30f;
+            nameText.enableAutoSizing = true;
+            nameText.fontSizeMin = 19f;
+            nameText.fontSizeMax = 30f;
+            nameText.textWrappingMode = TextWrappingModes.Normal;
+            nameText.overflowMode = TextOverflowModes.Ellipsis;
         }
 
         if (descText != null)
         {
             descText.text = summary;
             descText.color = new Color(0.21f, 0.16f, 0.12f);
-            descText.fontSize = 35f;
+            descText.fontSize = 26f;
+            descText.enableAutoSizing = true;
+            descText.fontSizeMin = 15f;
+            descText.fontSizeMax = 26f;
             descText.textWrappingMode = TextWrappingModes.Normal;
-            descText.lineSpacing = 6f;
+            descText.overflowMode = TextOverflowModes.Ellipsis;
+            descText.lineSpacing = 1f;
+            RectTransform descRect = descText.rectTransform;
+            descRect.offsetMin = new Vector2(descRect.offsetMin.x, Mathf.Max(descRect.offsetMin.y, 88f));
         }
 
         if (manaText != null)
@@ -173,7 +185,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
         shineImage.rectTransform.pivot = new Vector2(0f, 0.5f);
         shineImage.transform.SetAsLastSibling();
 
-        categoryLabel = CreateLabel("CategoryLabel", 16, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        categoryLabel = CreateLabel("CategoryLabel", 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         categoryLabel.textWrappingMode = TextWrappingModes.Normal;
         categoryLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
         categoryLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
@@ -186,13 +198,13 @@ public class EcosystemCardPrefabView : MonoBehaviour
         buttonRect.anchorMin = new Vector2(0.5f, 0f);
         buttonRect.anchorMax = new Vector2(0.5f, 0f);
         buttonRect.pivot = new Vector2(0.5f, 0f);
-        buttonRect.sizeDelta = new Vector2(170f, 44f);
-        buttonRect.anchoredPosition = new Vector2(0f, 18f);
+        buttonRect.sizeDelta = new Vector2(152f, 38f);
+        buttonRect.anchoredPosition = new Vector2(0f, 14f);
         Image buttonImage = buttonObject.GetComponent<Image>();
         buttonImage.color = new Color(0.93f, 0.84f, 0.63f, 0.95f);
         buttonImage.raycastTarget = false;
 
-        buttonLabel = CreateLabel("PlayChipLabel", 18, FontStyles.Bold, TextAlignmentOptions.Center);
+        buttonLabel = CreateLabel("PlayChipLabel", 16, FontStyles.Bold, TextAlignmentOptions.Center);
         buttonLabel.transform.SetParent(buttonObject.transform, false);
         RectTransform labelRect = buttonLabel.rectTransform;
         labelRect.anchorMin = Vector2.zero;
