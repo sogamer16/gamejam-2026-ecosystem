@@ -132,6 +132,7 @@ public class EcosystemController : MonoBehaviour
     private GameObject nueCardPrefab;
     private Sprite shirtFrontSprite;
     private Sprite shirtAccentSprite;
+    private Sprite addFishCardArtSprite;
     private readonly List<GameObject> fishPrefabs = new List<GameObject>();
     private GameObject snailPrefab;
     private Transform jarWorldRoot;
@@ -236,6 +237,7 @@ public class EcosystemController : MonoBehaviour
         nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
         shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
         shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
+        addFishCardArtSprite = LoadCardArtSprite("CardArt/AddFishUploaded");
         LoadCreaturePrefabs();
         LoadDicePrefab();
         defs[SpeciesType.Algae] = new SpeciesDef { Name = "Algae", Color = new Color(0.43f, 0.79f, 0.36f) };
@@ -260,6 +262,7 @@ public class EcosystemController : MonoBehaviour
             nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
             shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
             shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
+            addFishCardArtSprite = LoadCardArtSprite("CardArt/AddFishUploaded");
             LoadCreaturePrefabs();
             LoadDicePrefab();
             EnsurePresentationWorld();
@@ -420,7 +423,7 @@ public class EcosystemController : MonoBehaviour
         EnsureGameplayBrandLogo(headerCardRect);
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
-        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -208f), new Vector2(-14f, -414f));
+        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -240f), new Vector2(-14f, -446f));
         StyleLeftHudCard(statsCard, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         statsText = Label("Stats", statsCard.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         statsText.richText = true;
@@ -454,7 +457,7 @@ public class EcosystemController : MonoBehaviour
         nitrateBarFill = nitrateFillImg;
 
         GameObject warningCard = Panel("WarningCard", left.transform, new Color(1f, 0.84f, 0.3f, 0.06f));
-        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -426f), new Vector2(-14f, -536f));
+        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -458f), new Vector2(-14f, -568f));
         StyleLeftHudCard(warningCard, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
         warningCardImage = warningCard.GetComponent<Image>();
         warningText = Label("Warnings", warningCard.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
@@ -505,7 +508,7 @@ public class EcosystemController : MonoBehaviour
         Place(speciesText.rectTransform, new Vector2(0.72f, 1f), new Vector2(1f, 1f), new Vector2(0f, -68f), new Vector2(-124f, -112f));
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
         Button pauseButton = CreateUiButton("Pause", right.transform, new Color(0.82f, 0.84f, 0.74f), TogglePause);
-        Place(pauseButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-118f, -18f), new Vector2(-24f, -54f));
+        EnsurePauseButtonFrame(rightPanelRect, pauseButton.GetComponent<RectTransform>());
         water = null;
         lightGlow = null;
         playFlash = null;
@@ -693,10 +696,15 @@ public class EcosystemController : MonoBehaviour
             desc.color = new Color(0.29f, 0.38f, 0.37f);
         }
         EnsureGameplayBrandLogo(headerCardRect);
+        RectTransform pauseButtonRect = FindRect(canvasObject.transform, "PauseButton");
+        if (pauseButtonRect != null)
+        {
+            EnsurePauseButtonFrame(rightPanelRect, pauseButtonRect);
+        }
         RectTransform statsCardRect = FindRect(canvasObject.transform, "StatsCard");
         if (statsCardRect != null)
         {
-            Place(statsCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -208f), new Vector2(-14f, -414f));
+            Place(statsCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -240f), new Vector2(-14f, -446f));
             StyleLeftHudCard(statsCardRect.gameObject, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         }
         RectTransform statsRect = FindRect(canvasObject.transform, "Stats");
@@ -710,7 +718,7 @@ public class EcosystemController : MonoBehaviour
         RectTransform warningCardRect = FindRect(canvasObject.transform, "WarningCard");
         if (warningCardRect != null)
         {
-            Place(warningCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -426f), new Vector2(-14f, -536f));
+            Place(warningCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -458f), new Vector2(-14f, -568f));
             StyleLeftHudCard(warningCardRect.gameObject, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
         }
         RectTransform warningRect = FindRect(canvasObject.transform, "Warnings");
@@ -826,7 +834,7 @@ public class EcosystemController : MonoBehaviour
             headerCardRect = headerCard.GetComponent<RectTransform>();
         }
 
-        Place(headerCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -14f), new Vector2(-14f, -194f));
+        Place(headerCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -14f), new Vector2(-14f, -226f));
         StyleLeftHudCard(headerCardRect.gameObject, ThemePanelKind.Medium, new Color(0.97f, 0.99f, 0.97f, 0.97f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         return headerCardRect;
     }
@@ -884,13 +892,13 @@ public class EcosystemController : MonoBehaviour
             }
         }
 
-        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.94f, 0.98f, 0.96f, 0.9f));
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -194f), new Vector2(-14f, -126f));
-        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.94f, 0.98f, 0.96f, 0.9f));
+        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.9f, 0.95f, 0.92f, 0.97f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -214f), new Vector2(-12f, -108f));
+        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Medium, new Color(0.9f, 0.95f, 0.92f, 0.97f));
 
         Outline outline = logoPlate.AddComponent<Outline>();
-        outline.effectColor = new Color(0.11f, 0.21f, 0.19f, 0.22f);
-        outline.effectDistance = new Vector2(2f, -2f);
+        outline.effectColor = new Color(0.11f, 0.21f, 0.19f, 0.24f);
+        outline.effectDistance = new Vector2(3f, -3f);
 
         Image logoImage = BrandLogoUtility.CreateLogoImage("BrandLogo", logoPlate.transform);
         if (logoImage == null)
@@ -907,7 +915,58 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
-        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(8f, 6f), new Vector2(-8f, -6f));
+        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(8f, 10f), new Vector2(-8f, -10f));
+    }
+
+    private void EnsurePauseButtonFrame(RectTransform parent, RectTransform pauseButtonRect)
+    {
+        if (parent == null || pauseButtonRect == null)
+        {
+            return;
+        }
+
+        RectTransform frameRect = FindRect(parent, "PauseButtonFrame");
+        if (frameRect == null)
+        {
+            GameObject frame = Panel("PauseButtonFrame", parent, new Color(0.92f, 0.96f, 0.92f, 0.98f));
+            frameRect = frame.GetComponent<RectTransform>();
+        }
+
+        Place(frameRect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-132f, -12f), new Vector2(-12f, -68f));
+        Image frameImage = frameRect.GetComponent<Image>();
+        if (frameImage != null)
+        {
+            UiThemeStyler.ApplyPanel(frameImage, ThemePanelKind.Small, new Color(0.92f, 0.96f, 0.92f, 0.98f));
+            frameImage.raycastTarget = false;
+        }
+
+        Outline frameOutline = frameRect.GetComponent<Outline>();
+        if (frameOutline == null)
+        {
+            frameOutline = frameRect.gameObject.AddComponent<Outline>();
+        }
+
+        frameOutline.effectColor = new Color(0.1f, 0.18f, 0.17f, 0.28f);
+        frameOutline.effectDistance = new Vector2(3f, -3f);
+
+        pauseButtonRect.SetParent(frameRect, false);
+        Place(pauseButtonRect, Vector2.zero, Vector2.one, new Vector2(12f, 10f), new Vector2(-12f, -10f));
+        pauseButtonRect.SetAsLastSibling();
+
+        Image pauseImage = pauseButtonRect.GetComponent<Image>();
+        if (pauseImage != null)
+        {
+            pauseImage.color = new Color(0.84f, 0.94f, 0.94f, 1f);
+        }
+
+        Outline pauseOutline = pauseButtonRect.GetComponent<Outline>();
+        if (pauseOutline == null)
+        {
+            pauseOutline = pauseButtonRect.gameObject.AddComponent<Outline>();
+        }
+
+        pauseOutline.effectColor = new Color(0.08f, 0.16f, 0.17f, 0.2f);
+        pauseOutline.effectDistance = new Vector2(2f, -2f);
     }
 
     private void EnsurePresentationWorld()
@@ -2325,12 +2384,34 @@ public class EcosystemController : MonoBehaviour
 
     private Sprite GetCardArtSprite(CardDef card)
     {
-        if (card.Risk)
+        if (card == null)
         {
-            return shirtAccentSprite != null ? shirtAccentSprite : shirtFrontSprite;
+            return null;
         }
 
-        return card.Category == CardCategory.Snail || card.Category == CardCategory.Water ? shirtAccentSprite : shirtFrontSprite;
+        if (card.Name == "Add Fish")
+        {
+            return addFishCardArtSprite;
+        }
+
+        return null;
+    }
+
+    private static Sprite LoadCardArtSprite(string resourcePath)
+    {
+        Sprite sprite = Resources.Load<Sprite>(resourcePath);
+        if (sprite != null)
+        {
+            return sprite;
+        }
+
+        Texture2D texture = Resources.Load<Texture2D>(resourcePath);
+        if (texture == null)
+        {
+            return null;
+        }
+
+        return Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f));
     }
 
     private Sprite GetCardFrameSprite(CardDef card)

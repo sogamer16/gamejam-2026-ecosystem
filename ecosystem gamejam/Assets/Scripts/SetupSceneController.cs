@@ -219,15 +219,15 @@ public class SetupSceneController : MonoBehaviour
 
     private void AddSetupBrandLogo(Transform parent)
     {
-        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.95f, 0.99f, 0.97f, 0.9f));
+        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.9f, 0.96f, 0.93f, 0.96f));
         LayoutElement layout = logoPlate.AddComponent<LayoutElement>();
         layout.ignoreLayout = true;
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-182f, -96f), new Vector2(-28f, -22f));
-        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.95f, 0.99f, 0.97f, 0.9f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-256f, -154f), new Vector2(-24f, -22f));
+        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Medium, new Color(0.9f, 0.96f, 0.93f, 0.96f));
 
         Outline outline = logoPlate.AddComponent<Outline>();
-        outline.effectColor = new Color(0.12f, 0.22f, 0.23f, 0.16f);
-        outline.effectDistance = new Vector2(2f, -2f);
+        outline.effectColor = new Color(0.12f, 0.22f, 0.23f, 0.2f);
+        outline.effectDistance = new Vector2(3f, -3f);
 
         Image logoImage = BrandLogoUtility.CreateLogoImage("BrandLogo", logoPlate.transform);
         if (logoImage == null)
@@ -244,7 +244,7 @@ public class SetupSceneController : MonoBehaviour
             return;
         }
 
-        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(10f, 8f), new Vector2(-10f, -8f));
+        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(10f, 10f), new Vector2(-10f, -10f));
     }
 
     private void ChangeDifficulty(int delta)

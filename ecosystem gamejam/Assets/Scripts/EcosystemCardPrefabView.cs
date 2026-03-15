@@ -119,9 +119,10 @@ public class EcosystemCardPrefabView : MonoBehaviour
 
         if (cardImage != null)
         {
-            cardImage.sprite = null;
-            cardImage.preserveAspect = false;
-            cardImage.color = new Color(1f, 1f, 1f, 0f);
+            cardImage.sprite = artSprite;
+            cardImage.preserveAspect = artSprite != null;
+            cardImage.color = artSprite != null ? new Color(1f, 1f, 1f, 0.96f) : new Color(1f, 1f, 1f, 0f);
+            cardImage.gameObject.SetActive(artSprite != null);
         }
 
         if (passiveImage != null)
@@ -169,7 +170,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
             selectButton.interactable = interactable;
         }
 
-        ConfigureFoilMaterial(accentColor, null, shirtSprite, risk, selected);
+        ConfigureFoilMaterial(accentColor, artSprite, shirtSprite, risk, selected);
     }
 
     private void CreateOverlays()
