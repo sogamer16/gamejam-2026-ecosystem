@@ -862,19 +862,26 @@ public class EcosystemController : MonoBehaviour
         }
 
         Transform searchRoot = parent.parent != null ? parent.parent : parent;
-        GameObject existingPlate = FindObject(searchRoot, "BrandLogoPlate");
-        while (existingPlate != null)
+        List<GameObject> existingPlates = new List<GameObject>();
+        Transform[] existingTransforms = searchRoot.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < existingTransforms.Length; i++)
+        {
+            if (existingTransforms[i] != null && existingTransforms[i].name == "BrandLogoPlate")
+            {
+                existingPlates.Add(existingTransforms[i].gameObject);
+            }
+        }
+
+        for (int i = 0; i < existingPlates.Count; i++)
         {
             if (Application.isPlaying)
             {
-                Destroy(existingPlate);
+                Destroy(existingPlates[i]);
             }
             else
             {
-                DestroyImmediate(existingPlate);
+                DestroyImmediate(existingPlates[i]);
             }
-
-            existingPlate = FindObject(searchRoot, "BrandLogoPlate");
         }
 
         GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.94f, 0.98f, 0.96f, 0.9f));
