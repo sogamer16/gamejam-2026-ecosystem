@@ -370,6 +370,7 @@ public class EcosystemController : MonoBehaviour
         {
             if (BindExistingVisuals(existingCanvas.gameObject))
             {
+                EnsureGameplayBrandLogo(rightPanelRect);
                 return;
             }
 
@@ -501,6 +502,7 @@ public class EcosystemController : MonoBehaviour
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
         Button pauseButton = CreateUiButton("Pause", right.transform, new Color(0.82f, 0.84f, 0.74f), TogglePause);
         Place(pauseButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-118f, -18f), new Vector2(-24f, -54f));
+        EnsureGameplayBrandLogo(rightPanelRect);
 
         water = null;
         lightGlow = null;
@@ -739,6 +741,52 @@ public class EcosystemController : MonoBehaviour
         target.SetActive(false);
         target.hideFlags = HideFlags.HideInHierarchy;
         target.name = "__LegacyHidden__" + target.name;
+    }
+
+    private void EnsureGameplayBrandLogo(RectTransform parent)
+    {
+        if (parent == null)
+        {
+            return;
+        }
+
+        GameObject existingPlate = FindObject(parent, "BrandLogoPlate");
+        if (existingPlate != null)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(existingPlate);
+            }
+            else
+            {
+                DestroyImmediate(existingPlate);
+            }
+        }
+
+        GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.94f, 0.98f, 0.96f, 0.9f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-244f, -18f), new Vector2(-132f, -84f));
+        UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Small, new Color(0.94f, 0.98f, 0.96f, 0.9f));
+
+        Outline outline = logoPlate.AddComponent<Outline>();
+        outline.effectColor = new Color(0.11f, 0.21f, 0.19f, 0.22f);
+        outline.effectDistance = new Vector2(2f, -2f);
+
+        Image logoImage = BrandLogoUtility.CreateLogoImage("BrandLogo", logoPlate.transform);
+        if (logoImage == null)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(logoPlate);
+            }
+            else
+            {
+                DestroyImmediate(logoPlate);
+            }
+
+            return;
+        }
+
+        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(8f, 6f), new Vector2(-8f, -6f));
     }
 
     private void EnsurePresentationWorld()
