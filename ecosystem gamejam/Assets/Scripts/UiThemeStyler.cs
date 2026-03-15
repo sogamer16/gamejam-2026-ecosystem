@@ -71,33 +71,39 @@ public static class UiThemeStyler
         Sprite normal;
         Sprite pressed;
         Color labelColor;
+        Color imageTint;
         switch (kind)
         {
             case ThemeButtonKind.Start:
                 normal = buttonStart != null ? buttonStart : buttonBig;
                 pressed = buttonStartPressed != null ? buttonStartPressed : buttonBigPressed;
-                labelColor = new Color(0.17f, 0.12f, 0.08f);
+                labelColor = new Color(0.12f, 0.26f, 0.2f);
+                imageTint = new Color(0.88f, 0.98f, 0.9f);
                 break;
             case ThemeButtonKind.Danger:
                 normal = buttonCancel != null ? buttonCancel : buttonMedium;
                 pressed = buttonCancelPressed != null ? buttonCancelPressed : buttonMediumPressed;
-                labelColor = new Color(0.22f, 0.08f, 0.06f);
+                labelColor = new Color(0.38f, 0.16f, 0.12f);
+                imageTint = new Color(0.98f, 0.9f, 0.86f);
                 break;
             case ThemeButtonKind.Secondary:
                 normal = buttonMedium;
                 pressed = buttonMediumPressed;
-                labelColor = new Color(0.19f, 0.13f, 0.08f);
+                labelColor = new Color(0.16f, 0.27f, 0.29f);
+                imageTint = new Color(0.87f, 0.95f, 0.95f);
                 break;
             default:
                 normal = buttonBig;
                 pressed = buttonBigPressed;
-                labelColor = new Color(0.17f, 0.12f, 0.08f);
+                labelColor = new Color(0.23f, 0.19f, 0.12f);
+                imageTint = new Color(0.97f, 0.94f, 0.88f);
                 break;
         }
 
         image.sprite = normal;
         image.type = Image.Type.Simple;
-        image.color = Color.white;
+        image.color = imageTint;
+        button.targetGraphic = image;
 
         SpriteState state = button.spriteState;
         state.pressedSprite = pressed;
@@ -120,7 +126,7 @@ public static class UiThemeStyler
             return;
         }
 
-        text.color = new Color(0.2f, 0.14f, 0.08f);
+        text.color = new Color(0.12f, 0.22f, 0.23f);
         text.fontStyle = FontStyles.Bold;
     }
 
