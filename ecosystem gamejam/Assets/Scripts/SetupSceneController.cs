@@ -99,9 +99,38 @@ public class SetupSceneController : MonoBehaviour
         }
 
         ConfigureCanvas(canvas.gameObject);
+
+        if (canvas.transform.childCount > 0 && BindExistingUi(canvas.transform))
+        {
+            RefreshValues();
+            return;
+        }
+
         ClearChildren(canvas.transform);
         BuildUiContents(canvas.transform);
         RefreshValues();
+    }
+
+    private bool BindExistingUi(Transform root)
+    {
+        difficultyValue = FindText(root, "DifficultyValue");
+        jarValue = FindText(root, "Starting JarValue");
+        temperatureValue = FindText(root, "Starting TemperatureValue");
+        difficultyDesc = FindText(root, "DifficultyDesc");
+        jarDesc = FindText(root, "Starting JarDesc");
+        temperatureDesc = FindText(root, "Starting TemperatureDesc");
+
+        RebindControlButtons(root, "DifficultyBox", ChangeDifficulty);
+        RebindControlButtons(root, "Starting JarBox", ChangeJar);
+        RebindControlButtons(root, "Starting TemperatureBox", ChangeTemperature);
+        RebindNamedButton(root, "Start GameButton", StartGame);
+
+        return difficultyValue != null
+            && jarValue != null
+            && temperatureValue != null
+            && difficultyDesc != null
+            && jarDesc != null
+            && temperatureDesc != null;
     }
 
     private bool CanBuildEditorUi()
@@ -182,7 +211,7 @@ public class SetupSceneController : MonoBehaviour
         SetLayout(subtitle.gameObject, preferredHeight: 58f);
         subtitle.text = "Shape the first few days of your jar, then step into a short, card-driven ecosystem run.";
         subtitle.color = BodyColor;
-        subtitle.enableWordWrapping = true;
+        subtitle.textWrappingMode = TextWrappingModes.Normal;
 
         GameObject selections = CreateLayoutNode("Selections", card.transform);
         SetLayout(selections, flexibleHeight: 1f);
@@ -337,7 +366,7 @@ public class SetupSceneController : MonoBehaviour
         descText = Label(label + "Desc", info.transform, 15, FontStyles.Normal, TextAlignmentOptions.Left);
         SetLayout(descText.gameObject, preferredHeight: 44f);
         descText.color = BodyColor;
-        descText.enableWordWrapping = true;
+        descText.textWrappingMode = TextWrappingModes.Normal;
 
         GameObject selector = Panel(label + "Selector", box.transform, SelectorTint);
         UiThemeStyler.ApplyPanel(selector.GetComponent<Image>(), ThemePanelKind.Small, SelectorTint);
@@ -521,6 +550,107 @@ public class SetupSceneController : MonoBehaviour
             if (canvases[i] != null && canvases[i].gameObject.name == targetName)
             {
                 return canvases[i];
+            }
+        }
+
+        return null;
+    }
+
+    private void RebindControlButtons(Transform root, string boxName, Action<int> onAdjust)
+    {
+        GameObject box = FindObject(root, boxName);
+        if (box == null)
+        {
+            return;
+        }
+
+        Button[] buttons = box.GetComponentsInChildren<Button>(true);
+        if (buttons.Length < 2)
+        {
+            return;
+        }
+
+        Button minus = null;
+        Button plus = null;
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            if (buttons[i] == null)
+            {
+                continue;
+            }
+
+            if (buttons[i].name == "-Button")
+            {
+                minus = buttons[i];
+            }
+            else if (buttons[i].name == "+Button")
+            {
+                plus = buttons[i];
+            }
+        }
+
+        if (minus != null)
+        {
+            minus.onClick.RemoveAllListeners();
+            minus.onClick.AddListener(delegate { onAdjust(-1); });
+        }
+
+        if (plus != null)
+        {
+            plus.onClick.RemoveAllListeners();
+            plus.onClick.AddListener(delegate { onAdjust(1); });
+        }
+    }
+
+    private static void RebindNamedButton(Transform root, string buttonName, UnityEngine.Events.UnityAction onClick)
+    {
+        GameObject buttonObject = FindObject(root, buttonName);
+        if (buttonObject == null)
+        {
+            return;
+        }
+
+        Button button = buttonObject.GetComponent<Button>();
+        if (button == null)
+        {
+            return;
+        }
+
+        button.interactable = true;
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(onClick);
+    }
+
+    private static GameObject FindObject(Transform root, string targetName)
+    {
+        Transform match = FindChildRecursive(root, targetName);
+        return match != null ? match.gameObject : null;
+    }
+
+    private static TextMeshProUGUI FindText(Transform root, string targetName)
+    {
+        GameObject target = FindObject(root, targetName);
+        return target != null ? target.GetComponent<TextMeshProUGUI>() : null;
+    }
+
+    private static Transform FindChildRecursive(Transform parent, string name)
+    {
+        if (parent == null)
+        {
+            return null;
+        }
+
+        if (parent.name == name)
+        {
+            return parent;
+        }
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform match = FindChildRecursive(parent.GetChild(i), name);
+            if (match != null)
+            {
+                return match;
             }
         }
 

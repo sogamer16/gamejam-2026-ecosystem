@@ -20,6 +20,7 @@ public enum SpeciesType { Algae, Snail, Fish, Shrimp }
 [ExecuteAlways]
 public class EcosystemController : MonoBehaviour
 {
+    private static EcosystemController runtimeInstance;
     private enum GameState { Menu, Playing, Result }
     private enum DayPhase { AwaitingRoll, Rolling, AwaitingPlay, ResolvingTurn }
     private enum DifficultyMode { Easy, Medium, Hard }
@@ -133,6 +134,15 @@ public class EcosystemController : MonoBehaviour
     private Sprite shirtFrontSprite;
     private Sprite shirtAccentSprite;
     private Sprite addFishCardArtSprite;
+    private Sprite addSnailCardArtSprite;
+    private Sprite bigFeedCardArtSprite;
+    private Sprite boostLightCardArtSprite;
+    private Sprite deepCleanCardArtSprite;
+    private Sprite algaePurgeCardArtSprite;
+    private Sprite randomEventCardArtSprite;
+    private Sprite dimLightCardArtSprite;
+    private Sprite trimAlgaeCardArtSprite;
+    private Sprite waterChangeCardArtSprite;
     private readonly List<GameObject> fishPrefabs = new List<GameObject>();
     private GameObject snailPrefab;
     private Transform jarWorldRoot;
@@ -217,7 +227,10 @@ public class EcosystemController : MonoBehaviour
     private Mesh diceMesh;
     private Transform diceStageRoot;
     private Transform activeDie;
+    private Rigidbody activeDieBody;
+    private TextMeshPro diceValueText;
     private Material diceDisplayMaterial;
+    private PhysicsMaterial dicePhysicsMaterial;
 
     private void Awake()
     {
@@ -228,16 +241,29 @@ public class EcosystemController : MonoBehaviour
             LoadCreaturePrefabs();
             LoadDicePrefab();
             EnsurePresentationWorld();
+            canvas = FindNamedCanvas("EcosystemCanvas");
+            if (canvas != null)
+            {
+                return;
+            }
             BuildVisuals();
             return;
         }
+
+        if (runtimeInstance != null && runtimeInstance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        runtimeInstance = this;
 
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += OnSceneLoaded;
         nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
         shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
         shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
-        addFishCardArtSprite = LoadCardArtSprite("CardArt/AddFishUploaded");
+        LoadCardArtLibrary();
         LoadCreaturePrefabs();
         LoadDicePrefab();
         defs[SpeciesType.Algae] = new SpeciesDef { Name = "Algae", Color = new Color(0.43f, 0.79f, 0.36f) };
@@ -250,8 +276,42 @@ public class EcosystemController : MonoBehaviour
         ShowMenu();
     }
 
-    private void OnDestroy() { SceneManager.sceneLoaded -= OnSceneLoaded; }
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode) { EnsurePresentationWorld(); if (canvas == null) BuildVisuals(); }
+    private void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+        if (runtimeInstance == this)
+        {
+            runtimeInstance = null;
+        }
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        if (scene.path == "Assets/main.unity")
+        {
+            CleanupRuntimeUi();
+            if (FindFirstObjectByType<SetupSceneController>() == null)
+            {
+                new GameObject("SetupSceneController").AddComponent<SetupSceneController>();
+            }
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            runtimeInstance = null;
+            Destroy(gameObject);
+            return;
+        }
+
+        EnsurePresentationWorld();
+        if (canvas == null)
+        {
+            BuildVisuals();
+        }
+    }
 
     private void OnEnable()
     {
@@ -262,11 +322,38 @@ public class EcosystemController : MonoBehaviour
             nueCardPrefab = Resources.Load<GameObject>("EcosystemCards/CardUI");
             shirtFrontSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_01");
             shirtAccentSprite = Resources.Load<Sprite>("EcosystemCards/Shirts/Card_shirt_04");
-            addFishCardArtSprite = LoadCardArtSprite("CardArt/AddFishUploaded");
+            LoadCardArtLibrary();
             LoadCreaturePrefabs();
             LoadDicePrefab();
             EnsurePresentationWorld();
+            canvas = FindNamedCanvas("EcosystemCanvas");
+            if (canvas != null)
+            {
+                return;
+            }
             BuildVisuals();
+        }
+    }
+
+    private void ConfigureExistingGameplayCanvas(GameObject canvasObject)
+    {
+        if (canvasObject == null)
+        {
+            return;
+        }
+
+        Canvas existing = canvasObject.GetComponent<Canvas>() ?? canvasObject.AddComponent<Canvas>();
+        existing.renderMode = RenderMode.ScreenSpaceCamera;
+        existing.worldCamera = sceneCamera;
+        existing.planeDistance = 1f;
+
+        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>() ?? canvasObject.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+
+        if (canvasObject.GetComponent<GraphicRaycaster>() == null)
+        {
+            canvasObject.AddComponent<GraphicRaycaster>();
         }
     }
 
@@ -317,6 +404,7 @@ public class EcosystemController : MonoBehaviour
 
         diceStageRoot = null;
         activeDie = null;
+        activeDieBody = null;
         EnsureDiceStage();
     }
 
@@ -372,11 +460,15 @@ public class EcosystemController : MonoBehaviour
         Canvas existingCanvas = FindNamedCanvas("EcosystemCanvas");
         if (existingCanvas != null)
         {
+            ConfigureExistingGameplayCanvas(existingCanvas.gameObject);
             if (BindExistingVisuals(existingCanvas.gameObject))
             {
                 EnsureGameplayBrandLogo(leftPanelRect);
                 return;
             }
+
+            canvas = existingCanvas;
+            return;
 
             ClearVisualCaches();
             if (Application.isPlaying)
@@ -408,8 +500,8 @@ public class EcosystemController : MonoBehaviour
         GameObject vignetteBottom = Panel("VignetteBottom", canvas.transform, new Color(0.02f, 0.03f, 0.03f, 0.06f));
         Place(vignetteBottom.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0.16f), Vector2.zero, Vector2.zero);
 
-        GameObject left = Panel("Left", canvas.transform, new Color(0.05f, 0.08f, 0.09f, 0.6f));
-        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.17f, 1f), Vector2.zero, Vector2.zero);
+        GameObject left = Panel("Left", canvas.transform, new Color(0.05f, 0.08f, 0.09f, 0.58f));
+        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.19f, 1f), Vector2.zero, Vector2.zero);
         leftPanelRect = left.GetComponent<RectTransform>();
         RectTransform headerCardRect = EnsureLeftHudHeaderCard(left.transform);
         TextMeshProUGUI title = Label("Title", headerCardRect.transform, 30, FontStyles.Bold, TextAlignmentOptions.TopLeft);
@@ -418,12 +510,12 @@ public class EcosystemController : MonoBehaviour
         title.color = new Color(0.12f, 0.2f, 0.19f);
         TextMeshProUGUI desc = Label("Desc", headerCardRect.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -56f), new Vector2(-18f, -98f));
-        desc.text = "Roll 1d6 each day to earn points. Play 1 unlocked card, then draw 1 replacement.";
+        desc.text = "Roll, play 1 unlocked card, then draw 1 replacement.";
         desc.color = new Color(0.29f, 0.38f, 0.37f);
         EnsureGameplayBrandLogo(headerCardRect);
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
-        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -502f));
+        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -486f));
         StyleLeftHudCard(statsCard, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         statsText = Label("Stats", statsCard.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         statsText.richText = true;
@@ -457,7 +549,7 @@ public class EcosystemController : MonoBehaviour
         nitrateBarFill = nitrateFillImg;
 
         GameObject warningCard = Panel("WarningCard", left.transform, new Color(1f, 0.84f, 0.3f, 0.06f));
-        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -518f), new Vector2(-14f, -636f));
+        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -500f), new Vector2(-14f, -610f));
         StyleLeftHudCard(warningCard, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
         warningCardImage = warningCard.GetComponent<Image>();
         warningText = Label("Warnings", warningCard.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
@@ -487,7 +579,7 @@ public class EcosystemController : MonoBehaviour
         rerollButton = reroll;
 
         GameObject right = Panel("Right", canvas.transform, new Color(0.2f, 0.3f, 0.24f, 0.005f));
-        Place(right.GetComponent<RectTransform>(), new Vector2(0.17f, 0.015f), new Vector2(0.998f, 0.988f), new Vector2(8f, 0f), new Vector2(0f, 0f));
+        Place(right.GetComponent<RectTransform>(), new Vector2(0.19f, 0.015f), new Vector2(0.998f, 0.988f), new Vector2(8f, 0f), new Vector2(0f, 0f));
         rightPanelRect = right.GetComponent<RectTransform>();
         Outline o = right.AddComponent<Outline>();
         o.effectColor = new Color(0.16f, 0.28f, 0.22f, 0.8f);
@@ -664,6 +756,11 @@ public class EcosystemController : MonoBehaviour
         speciesText = FindText(canvasObject.transform, "Species");
         resultText = FindText(canvasObject.transform, "ResultText");
         tooltipText = FindText(canvasObject.transform, "TooltipText");
+        pauseStatusText = FindText(canvasObject.transform, "PauseStatus");
+        warningCardImage = FindImage(canvasObject.transform, "WarningCard");
+        nitrateBarFill = FindImage(canvasObject.transform, "NitrateFill");
+        stableProgressFill = FindImage(canvasObject.transform, "StableFill");
+        playButtonGlow = FindObject(canvasObject.transform, "PlayButtonGlow");
         primaryActionButton = FindObject(canvasObject.transform, "Play Selected CardButton")?.GetComponent<Button>();
         rerollButton = FindObject(canvasObject.transform, "Re-roll DieButton")?.GetComponent<Button>();
 
@@ -672,104 +769,30 @@ public class EcosystemController : MonoBehaviour
             return false;
         }
         ApplyThemeToExistingCanvas(canvasObject.transform);
-        Image bgImage = FindImage(canvasObject.transform, "BG");
-        if (bgImage != null) bgImage.color = new Color(0.02f, 0.03f, 0.03f, 0.02f);
-        Image feltImage = FindImage(canvasObject.transform, "Felt");
-        if (feltImage != null) feltImage.color = new Color(0.17f, 0.28f, 0.2f, 0.02f);
-        Image rightImage = FindImage(canvasObject.transform, "Right");
-        if (rightImage != null) rightImage.color = new Color(0.2f, 0.3f, 0.24f, 0.005f);
-        RectTransform rightRect = FindRect(canvasObject.transform, "Right");
-        if (rightRect != null)
+
+        if (!BindExistingCardSlots(canvasObject.transform))
         {
-            Place(rightRect, new Vector2(0.17f, 0.015f), new Vector2(0.998f, 0.988f), new Vector2(8f, 0f), new Vector2(0f, 0f));
+            if (rightPanelRect == null)
+            {
+                return false;
+            }
+
+            RebuildCardSlotsInExistingCanvas(rightPanelRect);
+            if (!BindExistingCardSlots(canvasObject.transform))
+            {
+                return false;
+            }
         }
-        Image leftImage = FindImage(canvasObject.transform, "Left");
-        if (leftImage != null) leftImage.color = new Color(0.06f, 0.1f, 0.1f, 0.78f);
-        RectTransform leftRect = FindRect(canvasObject.transform, "Left");
-        if (leftRect != null)
-        {
-            Place(leftRect, new Vector2(0f, 0f), new Vector2(0.17f, 1f), Vector2.zero, Vector2.zero);
-        }
-        RectTransform headerCardRect = EnsureLeftHudHeaderCard(leftPanelRect);
-        TextMeshProUGUI title = FindText(canvasObject.transform, "Title");
-        if (title != null)
-        {
-            title.rectTransform.SetParent(headerCardRect, false);
-            Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -16f), new Vector2(-18f, -52f));
-            title.color = new Color(0.12f, 0.2f, 0.19f);
-        }
-        TextMeshProUGUI desc = FindText(canvasObject.transform, "Desc");
-        if (desc != null)
-        {
-            desc.rectTransform.SetParent(headerCardRect, false);
-            Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -56f), new Vector2(-18f, -98f));
-            desc.color = new Color(0.29f, 0.38f, 0.37f);
-        }
-        EnsureGameplayBrandLogo(headerCardRect);
-        RectTransform pauseButtonRect = FindRect(canvasObject.transform, "PauseButton");
-        if (pauseButtonRect != null)
-        {
-            EnsurePauseButtonFrame(rightPanelRect, pauseButtonRect);
-        }
-        RectTransform statsCardRect = FindRect(canvasObject.transform, "StatsCard");
-        if (statsCardRect != null)
-        {
-            Place(statsCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -502f));
-            StyleLeftHudCard(statsCardRect.gameObject, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
-        }
-        RectTransform statsRect = FindRect(canvasObject.transform, "Stats");
-        if (statsRect != null)
-        {
-            if (statsCardRect != null) statsRect.SetParent(statsCardRect, false);
-            Place(statsRect, Vector2.zero, Vector2.one, new Vector2(16f, 14f), new Vector2(-16f, -42f));
-            TextMeshProUGUI stats = statsRect.GetComponent<TextMeshProUGUI>();
-            if (stats != null) stats.color = new Color(0.16f, 0.21f, 0.2f);
-        }
-        RectTransform warningCardRect = FindRect(canvasObject.transform, "WarningCard");
-        if (warningCardRect != null)
-        {
-            Place(warningCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -518f), new Vector2(-14f, -636f));
-            StyleLeftHudCard(warningCardRect.gameObject, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
-        }
-        RectTransform warningRect = FindRect(canvasObject.transform, "Warnings");
-        if (warningRect != null)
-        {
-            if (warningCardRect != null) warningRect.SetParent(warningCardRect, false);
-            Place(warningRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -14f), new Vector2(-16f, -60f));
-        }
-        RectTransform eventRect = FindRect(canvasObject.transform, "Event");
-        if (eventRect != null)
-        {
-            if (warningCardRect != null) eventRect.SetParent(warningCardRect, false);
-            Place(eventRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 28f), new Vector2(-16f, 50f));
-            TextMeshProUGUI eventLabel = eventRect.GetComponent<TextMeshProUGUI>();
-            if (eventLabel != null) eventLabel.color = new Color(0.28f, 0.34f, 0.35f);
-        }
-        RectTransform selectedRect = FindRect(canvasObject.transform, "Selected");
-        if (selectedRect != null)
-        {
-            if (warningCardRect != null) selectedRect.SetParent(warningCardRect, false);
-            Place(selectedRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 8f), new Vector2(-16f, 26f));
-            TextMeshProUGUI selectedLabel = selectedRect.GetComponent<TextMeshProUGUI>();
-            if (selectedLabel != null) selectedLabel.color = new Color(0.22f, 0.32f, 0.29f);
-        }
-        RectTransform reportCardRect = FindRect(canvasObject.transform, "ReportCard");
-        if (reportCardRect != null)
-        {
-            Place(reportCardRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 172f));
-            StyleLeftHudCard(reportCardRect.gameObject, ThemePanelKind.Small, new Color(0.97f, 0.99f, 0.98f, 0.95f), new Color(0.12f, 0.2f, 0.19f, 0.12f));
-        }
-        RectTransform reportRect = FindRect(canvasObject.transform, "Report");
-        if (reportRect != null)
-        {
-            if (reportCardRect != null) reportRect.SetParent(reportCardRect, false);
-            Place(reportRect, Vector2.zero, Vector2.one, new Vector2(16f, 12f), new Vector2(-16f, -12f));
-            TextMeshProUGUI reportLabel = reportRect.GetComponent<TextMeshProUGUI>();
-            if (reportLabel != null) reportLabel.color = new Color(0.22f, 0.29f, 0.29f);
-        }
+
+        RebindRuntimeButtons(canvasObject.transform);
+        return true;
+    }
+
+    private bool BindExistingCardSlots(Transform root)
+    {
         for (int i = 0; i < 3; i++)
         {
-            RectTransform slotRect = FindRect(canvasObject.transform, "Card" + i);
+            RectTransform slotRect = FindRect(root, "Card" + i);
             if (slotRect == null)
             {
                 continue;
@@ -787,6 +810,7 @@ public class EcosystemController : MonoBehaviour
             {
                 return false;
             }
+
             cardViews.Add(view);
             Button cardButton = view.SelectButton;
             int index = cardButtons.Count;
@@ -799,23 +823,60 @@ public class EcosystemController : MonoBehaviour
             {
                 canvasGroup = slotRect.gameObject.AddComponent<CanvasGroup>();
             }
+
             cardCanvasGroups.Add(canvasGroup);
         }
 
-        if (cardRoots.Count < 3 || cardButtons.Count < 3)
+        return cardRoots.Count >= 3 && cardButtons.Count >= 3;
+    }
+
+    private void RebuildCardSlotsInExistingCanvas(Transform parent)
+    {
+        RemoveExistingCardSlots(parent);
+
+        Transform handLabel = FindChildRecursive(parent, "HandLabel");
+        if (handLabel == null)
         {
-            return false;
+            TextMeshProUGUI label = Label("HandLabel", parent, 20, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+            label.text = "Today's Hand";
+            label.color = new Color(0.13f, 0.2f, 0.16f);
+            Place(label.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(120f, 136f), new Vector2(-120f, 174f));
         }
 
-        RebindNamedButton(canvasObject.transform, "Play Selected CardButton", HandlePrimaryAction);
-        RebindNamedButton(canvasObject.transform, "Re-roll DieButton", RerollDie);
-        RebindNamedButton(canvasObject.transform, "PauseButton", TogglePause);
-        RebindNamedButton(canvasObject.transform, "ResumeButton", TogglePause);
-        RebindNamedButton(canvasObject.transform, "Restart RunButton", RestartFromPause);
-        RebindNamedButton(canvasObject.transform, "QuitButton", QuitGame);
-        RebindNamedButton(canvasObject.transform, "Start PrototypeButton", StartGame);
-        RebindNamedButton(canvasObject.transform, "Play AgainButton", StartGame);
-        return true;
+        CreateCardSlots(parent);
+    }
+
+    private void RemoveExistingCardSlots(Transform parent)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            Transform existing = FindChildRecursive(parent, "Card" + i);
+            if (existing == null)
+            {
+                continue;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(existing.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(existing.gameObject);
+            }
+        }
+    }
+
+    private void RebindRuntimeButtons(Transform root)
+    {
+        RebindNamedButton(root, "Play Selected CardButton", HandlePrimaryAction);
+        RebindNamedButton(root, "Re-roll DieButton", RerollDie);
+        RebindNamedButton(root, "PauseButton", TogglePause);
+        RebindNamedButton(root, "ResumeButton", TogglePause);
+        RebindNamedButton(root, "Restart RunButton", RestartFromPause);
+        RebindNamedButton(root, "QuitButton", QuitGame);
+        RebindNamedButton(root, "Start PrototypeButton", StartGame);
+        RebindNamedButton(root, "Play AgainButton", StartGame);
     }
 
     private void CleanupLegacyUiObject(GameObject target)
@@ -1322,42 +1383,42 @@ public class EcosystemController : MonoBehaviour
             StartFish = 3,
             StartSnails = 2,
             StartAlgae = 5,
-            StartNitrates = 20f,
+            StartNitrates = 16f,
             StartLight = 50f,
-            StartRerolls = 3,
-            StableDaysToWin = 5,
-            BaseAlgaeGrowth = 0.8f,
-            LightGrowthPerPointAbove50 = 0.015f,
-            NitrateGrowthPerPoint = 0.012f,
-            MemoryBleed = 0.25f,
-            AlgaeSoftCapStart = 10,
+            StartRerolls = 4,
+            StableDaysToWin = 4,
+            BaseAlgaeGrowth = 0.72f,
+            LightGrowthPerPointAbove50 = 0.013f,
+            NitrateGrowthPerPoint = 0.010f,
+            MemoryBleed = 0.20f,
+            AlgaeSoftCapStart = 11,
             AlgaeSoftCapMultiplier = 0.4f,
-            NitrateWarning = 65f,
-            NitrateCollapse = 85f,
-            AlgaeWarning = 12,
-            AlgaeCollapse = 18,
-            StableNitrateMax = 55f,
+            NitrateWarning = 70f,
+            NitrateCollapse = 88f,
+            AlgaeWarning = 13,
+            AlgaeCollapse = 19,
+            StableNitrateMax = 58f,
             StableAlgaeMin = 2,
-            StableAlgaeMax = 10,
+            StableAlgaeMax = 11,
             StableFishMin = 1,
             StableSnailMin = 1,
-            FishWastePerTurn = 1.2f,
+            FishWastePerTurn = 1.1f,
             FishHungryGraze = 1,
-            FishStarveTurns = 2,
+            FishStarveTurns = 3,
             FishStarveLoseOne = false,
-            FishReproductionChancePerFish = 0.15f,
-            FishReproductionMinAlgae = 4,
+            FishReproductionChancePerFish = 0.18f,
+            FishReproductionMinAlgae = 3,
             SnailAlgaeEat = 1,
             SnailStarveThreshold = 2,
-            SnailStarveTurns = 2,
+            SnailStarveTurns = 3,
             SnailStarveLoseOne = false,
-            SnailReproductionChance = 0.12f,
-            SnailReproductionMinAlgae = 7,
-            PassiveNitrateDecay = 0.5f,
-            FeedFishNitrateMultiplier = 1.5f,
-            BloomFeedbackNitrates = 2.5f,
-            UncommonUnlockRoll = 3,
-            RareUnlockRoll = 5
+            SnailReproductionChance = 0.14f,
+            SnailReproductionMinAlgae = 6,
+            PassiveNitrateDecay = 0.65f,
+            FeedFishNitrateMultiplier = 1.35f,
+            BloomFeedbackNitrates = 2.0f,
+            UncommonUnlockRoll = 2,
+            RareUnlockRoll = 4
         };
     }
 
@@ -1396,19 +1457,19 @@ public class EcosystemController : MonoBehaviour
         hand.Clear();
         selected.Clear();
         AddCopiesToDeck("Feed Fish", difficulty == DifficultyMode.Easy ? 4 : difficulty == DifficultyMode.Hard ? 2 : 3);
-        AddCopiesToDeck("Water Change", difficulty == DifficultyMode.Easy ? 3 : difficulty == DifficultyMode.Hard ? 2 : 2);
+        AddCopiesToDeck("Water Change", difficulty == DifficultyMode.Easy ? 3 : difficulty == DifficultyMode.Hard ? 2 : 3);
         AddCopiesToDeck("Big Water Change", difficulty == DifficultyMode.Easy ? 2 : 1);
         AddCopiesToDeck("Deep Clean", difficulty == DifficultyMode.Easy ? 2 : difficulty == DifficultyMode.Medium ? 1 : 0);
         AddCopiesToDeck("Random Event", difficulty == DifficultyMode.Easy ? 1 : difficulty == DifficultyMode.Medium ? 2 : 3);
-        AddCopiesToDeck("Trim Algae", difficulty == DifficultyMode.Easy ? 3 : difficulty == DifficultyMode.Hard ? 2 : 2);
+        AddCopiesToDeck("Trim Algae", difficulty == DifficultyMode.Easy ? 3 : difficulty == DifficultyMode.Hard ? 2 : 3);
         AddCopiesToDeck("Algae Purge", 1);
         AddCopiesToDeck("Big Feed", difficulty == DifficultyMode.Hard ? 2 : 1);
         AddCopiesToDeck("Fertilise", difficulty == DifficultyMode.Hard ? 2 : 1);
         AddCopiesToDeck("Add Fish", difficulty == DifficultyMode.Hard ? 1 : 2);
         AddCopiesToDeck("Remove Fish", difficulty == DifficultyMode.Hard ? 1 : 2);
-        AddCopiesToDeck("Add Snail", difficulty == DifficultyMode.Hard ? 1 : 2);
-        AddCopiesToDeck("Dim Light", difficulty == DifficultyMode.Hard ? 1 : 2);
-        AddCopiesToDeck("Boost Light", difficulty == DifficultyMode.Easy ? 2 : 1);
+        AddCopiesToDeck("Add Snail", difficulty == DifficultyMode.Hard ? 1 : 3);
+        AddCopiesToDeck("Dim Light", difficulty == DifficultyMode.Hard ? 1 : 3);
+        AddCopiesToDeck("Boost Light", difficulty == DifficultyMode.Easy ? 2 : difficulty == DifficultyMode.Medium ? 2 : 1);
         AddCopiesToDeck("Algae Bloom", 1);
         Shuffle(drawPile);
     }
@@ -1422,6 +1483,116 @@ public class EcosystemController : MonoBehaviour
     private void RollDie()
     {
         currentDieRoll = UnityEngine.Random.Range(1, 7);
+        RefreshDiceValueLabel();
+    }
+
+    private IEnumerator RollDiePhysicsRoutine()
+    {
+        EnsureDiceActor();
+        if (activeDie == null || activeDieBody == null)
+        {
+            RollDie();
+            yield break;
+        }
+
+        currentDieRoll = 0;
+        RefreshDiceValueLabel();
+
+        activeDie.localPosition = new Vector3(UnityEngine.Random.Range(-0.08f, 0.08f), 0.72f, UnityEngine.Random.Range(-0.08f, 0.08f));
+        activeDie.localRotation = UnityEngine.Random.rotation;
+
+        activeDieBody.isKinematic = false;
+        activeDieBody.useGravity = true;
+        activeDieBody.linearVelocity = Vector3.zero;
+        activeDieBody.angularVelocity = Vector3.zero;
+        activeDieBody.Sleep();
+        activeDieBody.WakeUp();
+
+        Vector3 throwForce = new Vector3(
+            UnityEngine.Random.Range(-0.45f, 0.45f),
+            UnityEngine.Random.Range(1.55f, 2.1f),
+            UnityEngine.Random.Range(-0.45f, 0.45f));
+        Vector3 torque = new Vector3(
+            UnityEngine.Random.Range(-6.5f, 6.5f),
+            UnityEngine.Random.Range(-7.5f, 7.5f),
+            UnityEngine.Random.Range(-6.5f, 6.5f));
+
+        activeDieBody.AddForce(throwForce, ForceMode.Impulse);
+        activeDieBody.AddTorque(torque, ForceMode.Impulse);
+
+        float settledFor = 0f;
+        float timeout = 5f;
+        while (timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return new WaitForFixedUpdate();
+            if (activeDieBody == null)
+            {
+                break;
+            }
+
+            if (sceneCamera != null)
+            {
+                MoveCameraImmediate(GetDiceCameraPosition(), GetDiceCameraRotation());
+            }
+
+            bool nearlyStill = activeDieBody.linearVelocity.sqrMagnitude < 0.01f
+                && activeDieBody.angularVelocity.sqrMagnitude < 0.01f;
+            if (nearlyStill)
+            {
+                settledFor += Time.fixedDeltaTime;
+                if (settledFor >= 0.22f)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                settledFor = 0f;
+            }
+        }
+
+        if (activeDieBody != null)
+        {
+            activeDieBody.linearVelocity = Vector3.zero;
+            activeDieBody.angularVelocity = Vector3.zero;
+            activeDieBody.isKinematic = true;
+        }
+
+        Vector3 settledPosition = activeDie.localPosition;
+        settledPosition.x = Mathf.Clamp(settledPosition.x, -0.72f, 0.72f);
+        settledPosition.z = Mathf.Clamp(settledPosition.z, -0.72f, 0.72f);
+        settledPosition.y = Mathf.Max(0.16f, settledPosition.y);
+        activeDie.localPosition = settledPosition;
+
+        currentDieRoll = DetermineDieFaceValue();
+        RefreshDiceValueLabel();
+    }
+
+    private int DetermineDieFaceValue()
+    {
+        if (activeDie == null)
+        {
+            return 1;
+        }
+
+        float upDot = Vector3.Dot(activeDie.up, Vector3.up);
+        float downDot = Vector3.Dot(-activeDie.up, Vector3.up);
+        float rightDot = Vector3.Dot(activeDie.right, Vector3.up);
+        float leftDot = Vector3.Dot(-activeDie.right, Vector3.up);
+        float forwardDot = Vector3.Dot(activeDie.forward, Vector3.up);
+        float backDot = Vector3.Dot(-activeDie.forward, Vector3.up);
+
+        float bestDot = upDot;
+        int bestValue = 2;
+
+        if (forwardDot > bestDot) { bestDot = forwardDot; bestValue = 1; }
+        if (rightDot > bestDot) { bestDot = rightDot; bestValue = 4; }
+        if (leftDot > bestDot) { bestDot = leftDot; bestValue = 3; }
+        if (backDot > bestDot) { bestDot = backDot; bestValue = 6; }
+        if (downDot > bestDot) { bestDot = downDot; bestValue = 5; }
+
+        return bestValue;
     }
 
     private void RerollDie()
@@ -1689,6 +1860,7 @@ public class EcosystemController : MonoBehaviour
         selected.Clear();
         hoveredCardIndex = -1;
         currentDieRoll = 0;
+        RefreshDiceValueLabel();
         RefreshHud();
         if (state != GameState.Playing)
         {
@@ -1957,6 +2129,11 @@ public class EcosystemController : MonoBehaviour
 
     private void RefreshCards()
     {
+        if (!EnsureCardUiIsValid())
+        {
+            return;
+        }
+
         for (int i = 0; i < cardButtons.Count; i++)
         {
             bool visible = i < hand.Count;
@@ -2313,6 +2490,28 @@ public class EcosystemController : MonoBehaviour
         warningPulseTime = 0f;
     }
 
+    private void CleanupRuntimeUi()
+    {
+        if (canvas != null)
+        {
+            Destroy(canvas.gameObject);
+        }
+
+        canvas = null;
+        diceValueText = null;
+        leftPanelRect = null;
+        rightPanelRect = null;
+        drawPileMarker = null;
+        discardPileMarker = null;
+        water = null;
+        lightGlow = null;
+        playFlash = null;
+        tooltipPanel = null;
+        resultPanel = null;
+        pausePanel = null;
+        ClearVisualCaches();
+    }
+
     private static Transform FindChildRecursive(Transform parent, string name)
     {
         if (parent == null)
@@ -2389,6 +2588,7 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
+        button.interactable = true;
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(action);
     }
@@ -2400,12 +2600,39 @@ public class EcosystemController : MonoBehaviour
             return null;
         }
 
-        if (card.Name == "Add Fish")
+        return card.Name switch
         {
-            return addFishCardArtSprite;
-        }
+            "Add Fish" => addFishCardArtSprite,
+            "Remove Fish" => addFishCardArtSprite,
+            "Feed Fish" => bigFeedCardArtSprite,
+            "Big Feed" => bigFeedCardArtSprite,
+            "Add Snail" => addSnailCardArtSprite,
+            "Trim Algae" => trimAlgaeCardArtSprite,
+            "Algae Bloom" => trimAlgaeCardArtSprite,
+            "Algae Purge" => algaePurgeCardArtSprite,
+            "Dim Light" => dimLightCardArtSprite,
+            "Boost Light" => boostLightCardArtSprite,
+            "Water Change" => waterChangeCardArtSprite,
+            "Big Water Change" => waterChangeCardArtSprite,
+            "Deep Clean" => deepCleanCardArtSprite,
+            "Fertilise" => trimAlgaeCardArtSprite,
+            "Random Event" => randomEventCardArtSprite,
+            _ => null
+        };
+    }
 
-        return null;
+    private void LoadCardArtLibrary()
+    {
+        addFishCardArtSprite = LoadCardArtSprite("CardArt/AddFishUploaded");
+        addSnailCardArtSprite = LoadCardArtSprite("CardArt/add_snail");
+        bigFeedCardArtSprite = LoadCardArtSprite("CardArt/Big_feed");
+        boostLightCardArtSprite = LoadCardArtSprite("CardArt/boost_light");
+        deepCleanCardArtSprite = LoadCardArtSprite("CardArt/deep_clean");
+        algaePurgeCardArtSprite = LoadCardArtSprite("CardArt/emergency_purge");
+        randomEventCardArtSprite = LoadCardArtSprite("CardArt/random_event_");
+        dimLightCardArtSprite = LoadCardArtSprite("CardArt/shade_jar");
+        trimAlgaeCardArtSprite = LoadCardArtSprite("CardArt/trim_algae");
+        waterChangeCardArtSprite = LoadCardArtSprite("CardArt/water_change");
     }
 
     private static Sprite LoadCardArtSprite(string resourcePath)
@@ -2820,6 +3047,7 @@ public class EcosystemController : MonoBehaviour
         if (diceStageRoot != null)
         {
             CacheExistingDie();
+            CacheExistingDiceValueLabel();
             return;
         }
 
@@ -2828,6 +3056,7 @@ public class EcosystemController : MonoBehaviour
         {
             diceStageRoot = existing.transform;
             CacheExistingDie();
+            CacheExistingDiceValueLabel();
             return;
         }
 
@@ -2838,15 +3067,31 @@ public class EcosystemController : MonoBehaviour
         GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         marker.name = "DiceRollMarker";
         marker.transform.SetParent(diceStageRoot, false);
-        marker.transform.localScale = new Vector3(0.75f, 0.03f, 0.75f);
+        marker.transform.localScale = new Vector3(1.15f, 0.03f, 1.15f);
         Renderer renderer = marker.GetComponent<Renderer>();
         if (renderer != null)
         {
             renderer.sharedMaterial = CreateWorldMaterial(new Color(0.26f, 0.18f, 0.12f, 1f), false);
         }
 
+        CreateDiceBoundaryWall(diceStageRoot, "DiceWallLeft", new Vector3(-1.18f, 0.48f, 0f), new Vector3(0.08f, 0.48f, 1.18f));
+        CreateDiceBoundaryWall(diceStageRoot, "DiceWallRight", new Vector3(1.18f, 0.48f, 0f), new Vector3(0.08f, 0.48f, 1.18f));
+        CreateDiceBoundaryWall(diceStageRoot, "DiceWallFront", new Vector3(0f, 0.48f, 1.18f), new Vector3(1.18f, 0.48f, 0.08f));
+        CreateDiceBoundaryWall(diceStageRoot, "DiceWallBack", new Vector3(0f, 0.48f, -1.18f), new Vector3(1.18f, 0.48f, 0.08f));
+
         EnsureDiceActor();
+        EnsureDiceValueLabel();
         MarkEditorSceneDirty();
+    }
+
+    private void CreateDiceBoundaryWall(Transform parent, string name, Vector3 localPosition, Vector3 localScale)
+    {
+        GameObject wall = new GameObject(name);
+        wall.transform.SetParent(parent, false);
+        wall.transform.localPosition = localPosition;
+        wall.transform.localScale = localScale;
+        BoxCollider collider = wall.AddComponent<BoxCollider>();
+        collider.size = Vector3.one;
     }
 
     private Material CreateWorldMaterial(Color color, bool transparent)
@@ -3091,6 +3336,7 @@ public class EcosystemController : MonoBehaviour
     {
         dayPhase = DayPhase.AwaitingRoll;
         currentDieRoll = 0;
+        RefreshDiceValueLabel();
         selected.Clear();
         hoveredCardIndex = -1;
         latestWarnings = "Look down and roll the die to earn today's card points.";
@@ -3115,9 +3361,8 @@ public class EcosystemController : MonoBehaviour
 
         yield return AnimateCameraTo(GetDiceCameraPosition(), GetDiceCameraRotation(), 0.45f);
         EnsureDiceActor();
-        RollDie();
-        yield return AnimateDieRoll();
-        SnapDieToResult(currentDieRoll);
+        EnsureDiceValueLabel();
+        yield return RollDiePhysicsRoutine();
 
         if (!isReroll)
         {
@@ -3149,26 +3394,32 @@ public class EcosystemController : MonoBehaviour
             MarkEditorSceneDirty();
         }
 
+        if (activeDie != null && dicePrefab != null && IsLegacyInjectedDie(activeDie.gameObject))
+        {
+            GameObject oldDie = activeDie.gameObject;
+            activeDie = null;
+            if (Application.isPlaying) Destroy(oldDie);
+            else DestroyImmediate(oldDie);
+            MarkEditorSceneDirty();
+        }
+
         if (activeDie == null)
         {
             GameObject dieObject = CreateEditorFriendlyDieObject();
             dieObject.name = "ActiveDayDie";
             activeDie = dieObject.transform;
             activeDie.SetParent(diceStageRoot, false);
-            activeDie.localScale = Vector3.one * 0.55f;
+            activeDie.localScale = Vector3.one * 0.275f;
             activeDie.localPosition = new Vector3(0f, 0.18f, 0f);
             activeDie.localRotation = GetDieFaceRotation(1);
-            Rigidbody body = dieObject.GetComponent<Rigidbody>();
-            if (body != null)
-            {
-                Destroy(body);
-            }
-
             MarkEditorSceneDirty();
         }
 
         ApplyDiceGeometry(activeDie.gameObject);
         ApplyDiceMaterial(activeDie.gameObject);
+        EnsureDicePhysics(activeDie.gameObject);
+        EnsureDieFaceLabels(activeDie);
+        EnsureDiceValueLabel();
     }
 
     private GameObject CreateEditorFriendlyDieObject()
@@ -3187,15 +3438,21 @@ public class EcosystemController : MonoBehaviour
         return dicePrefab != null ? Instantiate(dicePrefab) : GameObject.CreatePrimitive(PrimitiveType.Cube);
     }
 
+    private bool IsLegacyInjectedDie(GameObject dieObject)
+    {
+        if (dieObject == null || dicePrefab == null)
+        {
+            return false;
+        }
+
+        MeshFilter rootMesh = dieObject.GetComponent<MeshFilter>();
+        bool hasChildMeshes = dieObject.GetComponentsInChildren<MeshFilter>(true).Length > 1;
+        return rootMesh != null && rootMesh.sharedMesh != null && !hasChildMeshes;
+    }
+
     private void ApplyDiceMaterial(GameObject dieObject)
     {
         if (dieObject == null)
-        {
-            return;
-        }
-
-        Renderer renderer = dieObject.GetComponent<Renderer>();
-        if (renderer == null)
         {
             return;
         }
@@ -3205,15 +3462,87 @@ public class EcosystemController : MonoBehaviour
             diceDisplayMaterial = BuildDiceDisplayMaterial();
         }
 
-        if (diceDisplayMaterial != null)
+        if (diceDisplayMaterial == null)
         {
-            renderer.sharedMaterial = diceDisplayMaterial;
+            return;
         }
+
+        Renderer[] renderers = dieObject.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].sharedMaterial = diceDisplayMaterial;
+            }
+        }
+    }
+
+    private bool EnsureCardUiIsValid()
+    {
+        if (canvas == null)
+        {
+            return false;
+        }
+
+        bool invalid = cardRoots.Count < 3 || cardButtons.Count < 3;
+        if (!invalid)
+        {
+            for (int i = 0; i < cardRoots.Count; i++)
+            {
+                if (cardRoots[i] == null)
+                {
+                    invalid = true;
+                    break;
+                }
+            }
+        }
+
+        if (!invalid)
+        {
+            return true;
+        }
+
+        ClearCardSlotCaches();
+        if (!BindExistingCardSlots(canvas.transform))
+        {
+            rightPanelRect = rightPanelRect != null ? rightPanelRect : FindRect(canvas.transform, "Right");
+            if (rightPanelRect == null)
+            {
+                return false;
+            }
+
+            RebuildCardSlotsInExistingCanvas(rightPanelRect);
+            ClearCardSlotCaches();
+            if (!BindExistingCardSlots(canvas.transform))
+            {
+                return false;
+            }
+        }
+
+        RebindRuntimeButtons(canvas.transform);
+        return true;
+    }
+
+    private void ClearCardSlotCaches()
+    {
+        cardButtons.Clear();
+        cardViews.Clear();
+        cardCanvasGroups.Clear();
+        cardRoots.Clear();
+        cardShines.Clear();
+        hoveredCardIndex = -1;
+        animatingCardIndex = -1;
+        animatingDrawCardIndex = -1;
     }
 
     private void ApplyDiceGeometry(GameObject dieObject)
     {
         if (dieObject == null || diceMesh == null)
+        {
+            return;
+        }
+
+        if (HasExistingDiceGeometry(dieObject))
         {
             return;
         }
@@ -3239,6 +3568,123 @@ public class EcosystemController : MonoBehaviour
 
         meshFilter.sharedMesh = diceMesh;
         meshCollider.sharedMesh = diceMesh;
+    }
+
+    private bool HasExistingDiceGeometry(GameObject dieObject)
+    {
+        MeshFilter[] meshFilters = dieObject.GetComponentsInChildren<MeshFilter>(true);
+        for (int i = 0; i < meshFilters.Length; i++)
+        {
+            if (meshFilters[i] != null && meshFilters[i].sharedMesh != null)
+            {
+                return true;
+            }
+        }
+
+        SkinnedMeshRenderer[] skinnedMeshes = dieObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skinnedMeshes.Length; i++)
+        {
+            if (skinnedMeshes[i] != null && skinnedMeshes[i].sharedMesh != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void EnsureDicePhysics(GameObject dieObject)
+    {
+        if (dieObject == null)
+        {
+            return;
+        }
+
+        if (dicePhysicsMaterial == null)
+        {
+            dicePhysicsMaterial = new PhysicsMaterial("RuntimeDicePhysics");
+            dicePhysicsMaterial.dynamicFriction = 0.55f;
+            dicePhysicsMaterial.staticFriction = 0.6f;
+            dicePhysicsMaterial.bounciness = 0.18f;
+            dicePhysicsMaterial.frictionCombine = PhysicsMaterialCombine.Average;
+            dicePhysicsMaterial.bounceCombine = PhysicsMaterialCombine.Average;
+        }
+
+        Collider[] colliders = dieObject.GetComponentsInChildren<Collider>(true);
+        if (colliders.Length == 0)
+        {
+            BoxCollider boxCollider = dieObject.GetComponent<BoxCollider>();
+            if (boxCollider == null)
+            {
+                boxCollider = dieObject.AddComponent<BoxCollider>();
+                boxCollider.size = Vector3.one;
+            }
+
+            colliders = new Collider[] { boxCollider };
+        }
+
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i] != null)
+            {
+                colliders[i].material = dicePhysicsMaterial;
+            }
+        }
+
+        activeDieBody = dieObject.GetComponent<Rigidbody>();
+        if (activeDieBody == null)
+        {
+            activeDieBody = dieObject.AddComponent<Rigidbody>();
+        }
+
+        activeDieBody.mass = 1f;
+        activeDieBody.linearDamping = 0.15f;
+        activeDieBody.angularDamping = 0.22f;
+        activeDieBody.interpolation = RigidbodyInterpolation.Interpolate;
+        activeDieBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        activeDieBody.useGravity = true;
+        activeDieBody.isKinematic = true;
+    }
+
+    private void EnsureDieFaceLabels(Transform dieTransform)
+    {
+        if (dieTransform == null)
+        {
+            return;
+        }
+
+        CreateDieFaceLabel(dieTransform, "Face1", "1", new Vector3(0f, 0.56f, 0f), Quaternion.Euler(90f, 0f, 0f));
+        CreateDieFaceLabel(dieTransform, "Face2", "2", new Vector3(0f, 0f, 0.56f), Quaternion.identity);
+        CreateDieFaceLabel(dieTransform, "Face3", "3", new Vector3(0.56f, 0f, 0f), Quaternion.Euler(0f, 90f, 0f));
+        CreateDieFaceLabel(dieTransform, "Face4", "4", new Vector3(-0.56f, 0f, 0f), Quaternion.Euler(0f, -90f, 0f));
+        CreateDieFaceLabel(dieTransform, "Face5", "5", new Vector3(0f, 0f, -0.56f), Quaternion.Euler(0f, 180f, 0f));
+        CreateDieFaceLabel(dieTransform, "Face6", "6", new Vector3(0f, -0.56f, 0f), Quaternion.Euler(-90f, 0f, 180f));
+    }
+
+    private void CreateDieFaceLabel(Transform dieTransform, string objectName, string faceValue, Vector3 localPosition, Quaternion localRotation)
+    {
+        Transform existing = dieTransform.Find(objectName);
+        TextMeshPro faceText = existing != null ? existing.GetComponent<TextMeshPro>() : null;
+        if (faceText == null)
+        {
+            GameObject labelObject = new GameObject(objectName);
+            labelObject.transform.SetParent(dieTransform, false);
+            labelObject.transform.localScale = Vector3.one * 0.18f;
+            faceText = labelObject.AddComponent<TextMeshPro>();
+            TMP_FontAsset faceFont = TmpFontUtility.GetFont();
+            if (faceFont != null)
+            {
+                faceText.font = faceFont;
+            }
+            faceText.alignment = TextAlignmentOptions.Center;
+            faceText.fontSize = 4.5f;
+            faceText.color = new Color(0.09f, 0.09f, 0.1f, 1f);
+            faceText.textWrappingMode = TextWrappingModes.NoWrap;
+        }
+
+        faceText.text = faceValue;
+        faceText.transform.localPosition = localPosition;
+        faceText.transform.localRotation = localRotation;
     }
 
     private Material BuildDiceDisplayMaterial()
@@ -3304,6 +3750,64 @@ public class EcosystemController : MonoBehaviour
         {
             activeDie = existingDie;
         }
+    }
+
+    private void CacheExistingDiceValueLabel()
+    {
+        if (diceStageRoot == null || diceValueText != null)
+        {
+            return;
+        }
+
+        Transform existingLabel = diceStageRoot.Find("DiceValueLabel");
+        if (existingLabel != null)
+        {
+            diceValueText = existingLabel.GetComponent<TextMeshPro>();
+        }
+    }
+
+    private void EnsureDiceValueLabel()
+    {
+        if (diceStageRoot == null)
+        {
+            return;
+        }
+
+        CacheExistingDiceValueLabel();
+        if (diceValueText == null)
+        {
+            GameObject labelObject = new GameObject("DiceValueLabel");
+            labelObject.transform.SetParent(diceStageRoot, false);
+            labelObject.transform.localPosition = new Vector3(0f, 0.95f, -0.45f);
+            labelObject.transform.localRotation = Quaternion.Euler(48f, 0f, 0f);
+            labelObject.transform.localScale = Vector3.one * 0.22f;
+
+            diceValueText = labelObject.AddComponent<TextMeshPro>();
+            TMP_FontAsset diceFont = TmpFontUtility.GetFont();
+            if (diceFont != null)
+            {
+                diceValueText.font = diceFont;
+            }
+            diceValueText.alignment = TextAlignmentOptions.Center;
+            diceValueText.fontSize = 3.2f;
+            diceValueText.color = new Color(0.96f, 0.87f, 0.42f, 1f);
+            diceValueText.textWrappingMode = TextWrappingModes.NoWrap;
+            MarkEditorSceneDirty();
+        }
+
+        RefreshDiceValueLabel();
+    }
+
+    private void RefreshDiceValueLabel()
+    {
+        if (diceValueText == null)
+        {
+            return;
+        }
+
+        bool hasRoll = currentDieRoll > 0;
+        diceValueText.text = hasRoll ? currentDieRoll.ToString() : "?";
+        diceValueText.alpha = hasRoll ? 1f : 0.55f;
     }
 
     private bool IsFallbackDice(GameObject dieObject)
@@ -3374,11 +3878,11 @@ public class EcosystemController : MonoBehaviour
         switch (Mathf.Clamp(result, 1, 6))
         {
             case 1: return Quaternion.identity;
-            case 2: return Quaternion.Euler(0f, 0f, -90f);
-            case 3: return Quaternion.Euler(90f, 0f, 0f);
-            case 4: return Quaternion.Euler(-90f, 0f, 0f);
-            case 5: return Quaternion.Euler(0f, 0f, 90f);
-            default: return Quaternion.Euler(180f, 0f, 0f);
+            case 2: return Quaternion.Euler(-90f, 0f, 0f);
+            case 3: return Quaternion.Euler(0f, 0f, 90f);
+            case 4: return Quaternion.Euler(0f, 0f, -90f);
+            case 5: return Quaternion.Euler(90f, 0f, 0f);
+            default: return Quaternion.Euler(0f, 0f, 180f);
         }
     }
 
@@ -3395,13 +3899,13 @@ public class EcosystemController : MonoBehaviour
 
     private Vector3 GetDiceCameraPosition()
     {
-        Vector3 focus = diceStageRoot != null ? diceStageRoot.position : new Vector3(-0.3f, -1.24f, 4.1f);
-        return focus + new Vector3(0.1f, 3.0f, -2.3f);
+        Vector3 focus = activeDie != null ? activeDie.position : diceStageRoot != null ? diceStageRoot.position : new Vector3(-0.3f, -1.24f, 4.1f);
+        return focus + new Vector3(0.12f, 2.55f, -1.95f);
     }
 
     private Quaternion GetDiceCameraRotation()
     {
-        Vector3 focus = diceStageRoot != null ? diceStageRoot.position + new Vector3(0f, 0.15f, 0f) : new Vector3(-0.3f, -1.1f, 4.1f);
+        Vector3 focus = activeDie != null ? activeDie.position + new Vector3(0f, 0.08f, 0f) : diceStageRoot != null ? diceStageRoot.position + new Vector3(0f, 0.15f, 0f) : new Vector3(-0.3f, -1.1f, 4.1f);
         return Quaternion.LookRotation((focus - GetDiceCameraPosition()).normalized, Vector3.up);
     }
 

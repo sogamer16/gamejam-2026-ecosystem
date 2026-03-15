@@ -20,16 +20,11 @@ public static class EcosystemBootstrap
 
     private static void EnsureControllerForActiveScene()
     {
+        EnsureEventSystem();
+
         if (Object.FindFirstObjectByType<EcosystemController>() != null || Object.FindFirstObjectByType<SetupSceneController>() != null)
         {
             return;
-        }
-
-        if (Object.FindFirstObjectByType<EventSystem>() == null)
-        {
-            GameObject eventSystemObject = new GameObject("EventSystem");
-            eventSystemObject.AddComponent<EventSystem>();
-            eventSystemObject.AddComponent<InputSystemUIInputModule>();
         }
 
         string activeScenePath = SceneManager.GetActiveScene().path;
@@ -41,6 +36,23 @@ public static class EcosystemBootstrap
         else
         {
             gameObject.AddComponent<EcosystemController>();
+        }
+    }
+
+    private static void EnsureEventSystem()
+    {
+        EventSystem eventSystem = Object.FindFirstObjectByType<EventSystem>();
+        if (eventSystem == null)
+        {
+            GameObject eventSystemObject = new GameObject("EventSystem");
+            eventSystem = eventSystemObject.AddComponent<EventSystem>();
+            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            return;
+        }
+
+        if (eventSystem.GetComponent<InputSystemUIInputModule>() == null)
+        {
+            eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
         }
     }
 }
