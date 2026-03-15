@@ -409,21 +409,21 @@ public class EcosystemController : MonoBehaviour
         Place(vignetteBottom.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0.16f), Vector2.zero, Vector2.zero);
 
         GameObject left = Panel("Left", canvas.transform, new Color(0.05f, 0.08f, 0.09f, 0.6f));
-        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.15f, 1f), Vector2.zero, Vector2.zero);
+        Place(left.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.17f, 1f), Vector2.zero, Vector2.zero);
         leftPanelRect = left.GetComponent<RectTransform>();
         RectTransform headerCardRect = EnsureLeftHudHeaderCard(left.transform);
         TextMeshProUGUI title = Label("Title", headerCardRect.transform, 30, FontStyles.Bold, TextAlignmentOptions.TopLeft);
-        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -18f), new Vector2(-18f, -58f));
+        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -16f), new Vector2(-18f, -52f));
         title.text = "Glass World";
         title.color = new Color(0.12f, 0.2f, 0.19f);
         TextMeshProUGUI desc = Label("Desc", headerCardRect.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -66f), new Vector2(-18f, -118f));
+        Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -56f), new Vector2(-18f, -98f));
         desc.text = "Roll 1d6 each day to earn points. Play 1 unlocked card, then draw 1 replacement.";
         desc.color = new Color(0.29f, 0.38f, 0.37f);
         EnsureGameplayBrandLogo(headerCardRect);
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
-        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -240f), new Vector2(-14f, -446f));
+        Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -502f));
         StyleLeftHudCard(statsCard, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         statsText = Label("Stats", statsCard.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         statsText.richText = true;
@@ -457,7 +457,7 @@ public class EcosystemController : MonoBehaviour
         nitrateBarFill = nitrateFillImg;
 
         GameObject warningCard = Panel("WarningCard", left.transform, new Color(1f, 0.84f, 0.3f, 0.06f));
-        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -458f), new Vector2(-14f, -568f));
+        Place(warningCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -518f), new Vector2(-14f, -636f));
         StyleLeftHudCard(warningCard, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
         warningCardImage = warningCard.GetComponent<Image>();
         warningText = Label("Warnings", warningCard.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
@@ -487,7 +487,7 @@ public class EcosystemController : MonoBehaviour
         rerollButton = reroll;
 
         GameObject right = Panel("Right", canvas.transform, new Color(0.2f, 0.3f, 0.24f, 0.005f));
-        Place(right.GetComponent<RectTransform>(), new Vector2(0.15f, 0.015f), new Vector2(0.998f, 0.988f), new Vector2(8f, 0f), new Vector2(0f, 0f));
+        Place(right.GetComponent<RectTransform>(), new Vector2(0.17f, 0.015f), new Vector2(0.998f, 0.988f), new Vector2(8f, 0f), new Vector2(0f, 0f));
         rightPanelRect = right.GetComponent<RectTransform>();
         Outline o = right.AddComponent<Outline>();
         o.effectColor = new Color(0.16f, 0.28f, 0.22f, 0.8f);
@@ -678,21 +678,31 @@ public class EcosystemController : MonoBehaviour
         if (feltImage != null) feltImage.color = new Color(0.17f, 0.28f, 0.2f, 0.02f);
         Image rightImage = FindImage(canvasObject.transform, "Right");
         if (rightImage != null) rightImage.color = new Color(0.2f, 0.3f, 0.24f, 0.005f);
+        RectTransform rightRect = FindRect(canvasObject.transform, "Right");
+        if (rightRect != null)
+        {
+            Place(rightRect, new Vector2(0.17f, 0.015f), new Vector2(0.998f, 0.988f), new Vector2(8f, 0f), new Vector2(0f, 0f));
+        }
         Image leftImage = FindImage(canvasObject.transform, "Left");
         if (leftImage != null) leftImage.color = new Color(0.06f, 0.1f, 0.1f, 0.78f);
+        RectTransform leftRect = FindRect(canvasObject.transform, "Left");
+        if (leftRect != null)
+        {
+            Place(leftRect, new Vector2(0f, 0f), new Vector2(0.17f, 1f), Vector2.zero, Vector2.zero);
+        }
         RectTransform headerCardRect = EnsureLeftHudHeaderCard(leftPanelRect);
         TextMeshProUGUI title = FindText(canvasObject.transform, "Title");
         if (title != null)
         {
             title.rectTransform.SetParent(headerCardRect, false);
-            Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -18f), new Vector2(-18f, -58f));
+            Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -16f), new Vector2(-18f, -52f));
             title.color = new Color(0.12f, 0.2f, 0.19f);
         }
         TextMeshProUGUI desc = FindText(canvasObject.transform, "Desc");
         if (desc != null)
         {
             desc.rectTransform.SetParent(headerCardRect, false);
-            Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -66f), new Vector2(-18f, -118f));
+            Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -56f), new Vector2(-18f, -98f));
             desc.color = new Color(0.29f, 0.38f, 0.37f);
         }
         EnsureGameplayBrandLogo(headerCardRect);
@@ -704,7 +714,7 @@ public class EcosystemController : MonoBehaviour
         RectTransform statsCardRect = FindRect(canvasObject.transform, "StatsCard");
         if (statsCardRect != null)
         {
-            Place(statsCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -240f), new Vector2(-14f, -446f));
+            Place(statsCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -502f));
             StyleLeftHudCard(statsCardRect.gameObject, ThemePanelKind.Medium, new Color(0.98f, 0.99f, 0.97f, 0.96f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         }
         RectTransform statsRect = FindRect(canvasObject.transform, "Stats");
@@ -718,7 +728,7 @@ public class EcosystemController : MonoBehaviour
         RectTransform warningCardRect = FindRect(canvasObject.transform, "WarningCard");
         if (warningCardRect != null)
         {
-            Place(warningCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -458f), new Vector2(-14f, -568f));
+            Place(warningCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -518f), new Vector2(-14f, -636f));
             StyleLeftHudCard(warningCardRect.gameObject, ThemePanelKind.Notice, new Color(0.99f, 0.97f, 0.92f, 0.98f), new Color(0.38f, 0.24f, 0.08f, 0.16f));
         }
         RectTransform warningRect = FindRect(canvasObject.transform, "Warnings");
@@ -746,6 +756,7 @@ public class EcosystemController : MonoBehaviour
         RectTransform reportCardRect = FindRect(canvasObject.transform, "ReportCard");
         if (reportCardRect != null)
         {
+            Place(reportCardRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 172f));
             StyleLeftHudCard(reportCardRect.gameObject, ThemePanelKind.Small, new Color(0.97f, 0.99f, 0.98f, 0.95f), new Color(0.12f, 0.2f, 0.19f, 0.12f));
         }
         RectTransform reportRect = FindRect(canvasObject.transform, "Report");
@@ -834,7 +845,7 @@ public class EcosystemController : MonoBehaviour
             headerCardRect = headerCard.GetComponent<RectTransform>();
         }
 
-        Place(headerCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -14f), new Vector2(-14f, -226f));
+        Place(headerCardRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -14f), new Vector2(-14f, -282f));
         StyleLeftHudCard(headerCardRect.gameObject, ThemePanelKind.Medium, new Color(0.97f, 0.99f, 0.97f, 0.97f), new Color(0.12f, 0.2f, 0.19f, 0.14f));
         return headerCardRect;
     }
@@ -893,7 +904,7 @@ public class EcosystemController : MonoBehaviour
         }
 
         GameObject logoPlate = Panel("BrandLogoPlate", parent, new Color(0.9f, 0.95f, 0.92f, 0.97f));
-        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -214f), new Vector2(-12f, -108f));
+        Place(logoPlate.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(10f, -270f), new Vector2(-10f, -102f));
         UiThemeStyler.ApplyPanel(logoPlate.GetComponent<Image>(), ThemePanelKind.Medium, new Color(0.9f, 0.95f, 0.92f, 0.97f));
 
         Outline outline = logoPlate.AddComponent<Outline>();
@@ -915,7 +926,7 @@ public class EcosystemController : MonoBehaviour
             return;
         }
 
-        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(8f, 10f), new Vector2(-8f, -10f));
+        Place(logoImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(6f, 8f), new Vector2(-6f, -8f));
     }
 
     private void EnsurePauseButtonFrame(RectTransform parent, RectTransform pauseButtonRect)
