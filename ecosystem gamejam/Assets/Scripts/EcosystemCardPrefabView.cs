@@ -21,6 +21,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
     private Button selectButton;
     private TextMeshProUGUI buttonLabel;
     private TextMeshProUGUI categoryLabel;
+    private TextMeshProUGUI summaryLabel;
     private Image inputSurface;
     private Image shirtFrameImage;
     private Image accentGlowImage;
@@ -194,6 +195,12 @@ public class EcosystemCardPrefabView : MonoBehaviour
             categoryLabel.color = risk ? new Color(0.86f, 0.28f, 0.22f) : Color.Lerp(accentColor, Color.black, 0.25f);
         }
 
+        if (summaryLabel != null)
+        {
+            summaryLabel.text = summary;
+            summaryLabel.color = interactable ? new Color(0.24f, 0.18f, 0.14f, 0.96f) : new Color(0.38f, 0.33f, 0.29f, 0.92f);
+        }
+
         if (buttonLabel != null)
         {
             buttonLabel.text = selected ? "Selected" : "Play";
@@ -227,6 +234,18 @@ public class EcosystemCardPrefabView : MonoBehaviour
         categoryLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
         categoryLabel.rectTransform.offsetMin = new Vector2(26f, -60f);
         categoryLabel.rectTransform.offsetMax = new Vector2(-26f, -16f);
+
+        summaryLabel = CreateLabel("SummaryLabel", 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        summaryLabel.enableAutoSizing = true;
+        summaryLabel.fontSizeMin = 10f;
+        summaryLabel.fontSizeMax = 13f;
+        summaryLabel.textWrappingMode = TextWrappingModes.Normal;
+        summaryLabel.overflowMode = TextOverflowModes.Ellipsis;
+        summaryLabel.lineSpacing = -8f;
+        summaryLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
+        summaryLabel.rectTransform.anchorMax = new Vector2(1f, 0f);
+        summaryLabel.rectTransform.offsetMin = new Vector2(28f, 58f);
+        summaryLabel.rectTransform.offsetMax = new Vector2(-28f, 116f);
 
         GameObject buttonObject = new GameObject("PlayChip", typeof(RectTransform), typeof(Image));
         buttonObject.transform.SetParent(transform, false);

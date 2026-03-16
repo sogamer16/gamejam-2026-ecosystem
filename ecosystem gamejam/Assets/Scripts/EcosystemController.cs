@@ -155,8 +155,6 @@ public class EcosystemController : MonoBehaviour
     private Light jarFillLight;
     private RectTransform leftPanelRect;
     private RectTransform rightPanelRect;
-    private RectTransform drawPileMarker;
-    private RectTransform discardPileMarker;
     private Image water;
     private Image lightGlow;
     private Image playFlash;
@@ -593,8 +591,6 @@ public class EcosystemController : MonoBehaviour
         deckText = Label("Deck", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(deckText.rectTransform, new Vector2(0f, 1f), new Vector2(0.24f, 1f), new Vector2(24f, -68f), new Vector2(-8f, -104f));
         deckText.color = new Color(0.14f, 0.2f, 0.17f);
-        drawPileMarker = CreatePileMarker("DrawPileMarker", right.transform, new Vector2(110f, -126f), "Draw");
-        discardPileMarker = CreatePileMarker("DiscardPileMarker", right.transform, new Vector2(218f, -126f), "Discard");
         speciesText = Label("Species", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopRight);
         Place(speciesText.rectTransform, new Vector2(0.72f, 1f), new Vector2(1f, 1f), new Vector2(0f, -68f), new Vector2(-124f, -112f));
         speciesText.color = new Color(0.14f, 0.2f, 0.17f);
@@ -726,8 +722,16 @@ public class EcosystemController : MonoBehaviour
         {
             CleanupLegacyUiObject(legacyAnchor.gameObject);
         }
-        drawPileMarker = FindRect(canvasObject.transform, "DrawPileMarker");
-        discardPileMarker = FindRect(canvasObject.transform, "DiscardPileMarker");
+        RectTransform legacyDrawPileMarker = FindRect(canvasObject.transform, "DrawPileMarker");
+        if (legacyDrawPileMarker != null)
+        {
+            CleanupLegacyUiObject(legacyDrawPileMarker.gameObject);
+        }
+        RectTransform legacyDiscardPileMarker = FindRect(canvasObject.transform, "DiscardPileMarker");
+        if (legacyDiscardPileMarker != null)
+        {
+            CleanupLegacyUiObject(legacyDiscardPileMarker.gameObject);
+        }
         water = FindImage(canvasObject.transform, "Water");
         lightGlow = FindImage(canvasObject.transform, "LightGlow");
         playFlash = FindImage(canvasObject.transform, "PlayFlash");
@@ -1783,13 +1787,9 @@ public class EcosystemController : MonoBehaviour
             CreateSparkBurst(playAnimTarget, playedCard.Color, 12);
             screenShakeTime = 0.15f;
             bloomFlash = Mathf.Max(bloomFlash, 0.55f);
-            if (discardPileMarker != null)
-            {
-                Vector3 discardWorld = discardPileMarker.TransformPoint(discardPileMarker.rect.center);
-                Vector2 discardTarget = (Vector2)rightPanelRect.InverseTransformPoint(discardWorld);
-                StartCardAnimation(playedIndex, discardTarget, -14f, 1.18f, 0.38f, 1f, 0.18f, 0.24f);
-                yield return WaitForCardAnimation();
-            }
+            Vector2 discardTarget = GetDiscardPilePosition();
+            StartCardAnimation(playedIndex, discardTarget, -14f, 1.18f, 0.38f, 1f, 0.18f, 0.24f);
+            yield return WaitForCardAnimation();
         }
 
         TurnState turn = new TurnState();
@@ -2155,7 +2155,7 @@ public class EcosystemController : MonoBehaviour
                 float eased = EaseOutCubic(Mathf.Clamp01(drawAnimTime));
                 Vector2 drawTargetPos = GetHandCardTargetPosition(i);
                 float drawTargetRot = GetHandCardTargetRotation(i);
-                Vector2 startPos = GetPilePosition(drawPileMarker);
+                Vector2 startPos = GetDrawPilePosition();
                 rect.anchoredPosition = Vector2.Lerp(startPos, drawTargetPos, eased);
                 rect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(10f, drawTargetRot, eased));
                 rect.localScale = Vector3.Lerp(Vector3.one * 0.72f, Vector3.one, eased);
@@ -2327,7 +2327,7 @@ public class EcosystemController : MonoBehaviour
         animatingDrawCardIndex = index;
         drawAnimTime = 0f;
         drawAnimDuration = 0.26f;
-        cardRoots[index].anchoredPosition = GetPilePosition(drawPileMarker);
+        cardRoots[index].anchoredPosition = GetDrawPilePosition();
         cardRoots[index].localRotation = Quaternion.Euler(0f, 0f, 10f);
         cardRoots[index].localScale = Vector3.one * 0.72f;
         if (index < cardCanvasGroups.Count && cardCanvasGroups[index] != null)
@@ -2366,42 +2366,24 @@ public class EcosystemController : MonoBehaviour
         return -spread * 7f;
     }
 
-    private Vector2 GetPilePosition(RectTransform pileMarker)
+    private Vector2 GetDrawPilePosition()
     {
-        if (pileMarker == null || rightPanelRect == null)
+        if (rightPanelRect == null)
         {
             return new Vector2(0f, 24f);
         }
 
-        Vector3 world = pileMarker.TransformPoint(pileMarker.rect.center);
-        return (Vector2)rightPanelRect.InverseTransformPoint(world);
+        return new Vector2(-540f, 360f);
     }
 
-    private RectTransform CreatePileMarker(string name, Transform parent, Vector2 anchoredPosition, string label)
+    private Vector2 GetDiscardPilePosition()
     {
-        GameObject pile = Panel(name, parent, new Color(0.96f, 0.92f, 0.84f, 0.9f));
-        RectTransform rect = pile.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0.5f, 1f);
-        rect.sizeDelta = new Vector2(92f, 126f);
-        rect.anchoredPosition = anchoredPosition;
-        Shadow shadow = pile.AddComponent<Shadow>();
-        shadow.effectColor = new Color(0f, 0f, 0f, 0.18f);
-        shadow.effectDistance = new Vector2(0f, -6f);
-        if (shirtFrontSprite != null)
+        if (rightPanelRect == null)
         {
-            pile.GetComponent<Image>().sprite = shirtFrontSprite;
-            pile.GetComponent<Image>().type = Image.Type.Sliced;
-            pile.GetComponent<Image>().preserveAspect = false;
+            return new Vector2(0f, 24f);
         }
 
-        TextMeshProUGUI text = Label(name + "Label", pile.transform, 14, FontStyles.Bold, TextAlignmentOptions.Bottom);
-        Stretch(text.rectTransform);
-        text.margin = new Vector4(8f, 8f, 8f, 10f);
-        text.text = label;
-        text.color = new Color(0.18f, 0.14f, 0.1f);
-        return rect;
+        return new Vector2(-432f, 360f);
     }
 
     private Vector2 GetJarScreenTarget()
@@ -2453,8 +2435,6 @@ public class EcosystemController : MonoBehaviour
         diceValueText = null;
         leftPanelRect = null;
         rightPanelRect = null;
-        drawPileMarker = null;
-        discardPileMarker = null;
         water = null;
         lightGlow = null;
         playFlash = null;
