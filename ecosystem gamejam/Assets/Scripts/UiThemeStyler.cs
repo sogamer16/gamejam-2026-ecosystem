@@ -20,6 +20,11 @@ public enum ThemeButtonKind
 
 public static class UiThemeStyler
 {
+    public static readonly Color BrightText = new Color(0.93f, 0.98f, 1f, 1f);
+    public static readonly Color BrightTextSoft = new Color(0.82f, 0.96f, 0.98f, 1f);
+    public static readonly Color BrightTextWarm = new Color(1f, 0.93f, 0.72f, 1f);
+    public static readonly Color BrightTextDanger = new Color(1f, 0.78f, 0.72f, 1f);
+
     private static Sprite boardLarge;
     private static Sprite boardMedium;
     private static Sprite boardSmall;

@@ -123,7 +123,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
         if (nameText != null)
         {
             nameText.text = title;
-            nameText.color = new Color(0.17f, 0.11f, 0.08f);
+            nameText.color = Color.black;
             nameText.fontSize = 30f;
             nameText.enableAutoSizing = true;
             nameText.fontSizeMin = 19f;
@@ -135,7 +135,7 @@ public class EcosystemCardPrefabView : MonoBehaviour
         if (descText != null)
         {
             descText.text = summary;
-            descText.color = new Color(0.21f, 0.16f, 0.12f);
+            descText.color = Color.black;
             descText.fontSize = 26f;
             descText.enableAutoSizing = true;
             descText.fontSizeMin = 15f;
@@ -192,19 +192,19 @@ public class EcosystemCardPrefabView : MonoBehaviour
         if (categoryLabel != null)
         {
             categoryLabel.text = category.ToUpperInvariant() + (risk ? "  RISK" : string.Empty);
-            categoryLabel.color = risk ? new Color(0.86f, 0.28f, 0.22f) : Color.Lerp(accentColor, Color.black, 0.25f);
+            categoryLabel.color = Color.black;
         }
 
         if (summaryLabel != null)
         {
             summaryLabel.text = summary;
-            summaryLabel.color = interactable ? new Color(0.24f, 0.18f, 0.14f, 0.96f) : new Color(0.38f, 0.33f, 0.29f, 0.92f);
+            summaryLabel.color = Color.black;
         }
 
         if (buttonLabel != null)
         {
             buttonLabel.text = selected ? "Selected" : "Play";
-            buttonLabel.color = interactable ? new Color(0.16f, 0.13f, 0.1f) : new Color(0.4f, 0.37f, 0.34f);
+            buttonLabel.color = Color.black;
         }
 
         if (selectButton != null)

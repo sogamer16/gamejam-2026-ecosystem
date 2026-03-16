@@ -505,11 +505,11 @@ public class EcosystemController : MonoBehaviour
         TextMeshProUGUI title = Label("Title", headerCardRect.transform, 30, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -16f), new Vector2(-18f, -52f));
         title.text = "Glass World";
-        title.color = new Color(0.12f, 0.2f, 0.19f);
+        title.color = UiThemeStyler.BrightText;
         TextMeshProUGUI desc = Label("Desc", headerCardRect.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(desc.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -56f), new Vector2(-18f, -98f));
         desc.text = "Roll, play 1 unlocked card, then draw 1 replacement.";
-        desc.color = new Color(0.29f, 0.38f, 0.37f);
+        desc.color = UiThemeStyler.BrightTextSoft;
 
         GameObject statsCard = Panel("StatsCard", left.transform, new Color(1f, 1f, 1f, 0.05f));
         Place(statsCard.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -296f), new Vector2(-14f, -486f));
@@ -517,7 +517,7 @@ public class EcosystemController : MonoBehaviour
         statsText = Label("Stats", statsCard.transform, 15, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         statsText.richText = true;
         Place(statsText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16f, 14f), new Vector2(-16f, -42f));
-        statsText.color = new Color(0.16f, 0.21f, 0.2f);
+        statsText.color = UiThemeStyler.BrightText;
 
         // Stable days progress bar (inside stats card, pinned to bottom)
         GameObject stableBarTrack = Panel("StableBarTrack", statsCard.transform, new Color(0f, 0f, 0f, 0.28f));
@@ -551,19 +551,19 @@ public class EcosystemController : MonoBehaviour
         warningCardImage = warningCard.GetComponent<Image>();
         warningText = Label("Warnings", warningCard.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(warningText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(16f, -14f), new Vector2(-16f, -60f));
-        warningText.color = new Color(0.46f, 0.26f, 0.1f);
+        warningText.color = UiThemeStyler.BrightTextDanger;
         eventText = Label("Event", warningCard.transform, 12, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(eventText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 28f), new Vector2(-16f, 50f));
-        eventText.color = new Color(0.28f, 0.34f, 0.35f);
+        eventText.color = UiThemeStyler.BrightTextSoft;
         selectedText = Label("Selected", warningCard.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(selectedText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 8f), new Vector2(-16f, 26f));
-        selectedText.color = new Color(0.22f, 0.32f, 0.29f);
+        selectedText.color = UiThemeStyler.BrightTextWarm;
         GameObject reportCard = Panel("ReportCard", left.transform, new Color(1f, 1f, 1f, 0.04f));
         Place(reportCard.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 14f), new Vector2(-14f, 172f));
         StyleLeftHudCard(reportCard, ThemePanelKind.Small, new Color(0.97f, 0.99f, 0.98f, 0.95f), new Color(0.12f, 0.2f, 0.19f, 0.12f));
         reportText = Label("Report", reportCard.transform, 13, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         Place(reportText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16f, 12f), new Vector2(-16f, -12f));
-        reportText.color = new Color(0.22f, 0.29f, 0.29f);
+        reportText.color = Color.black;
 
         playButtonGlow = Panel("PlayButtonGlow", left.transform, new Color(0.38f, 0.94f, 0.62f, 0f));
         Place(playButtonGlow.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(12f, 180f), new Vector2(-12f, 240f));
@@ -590,10 +590,10 @@ public class EcosystemController : MonoBehaviour
         bannerText.color = new Color(0.88f, 0.96f, 0.9f);
         deckText = Label("Deck", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(deckText.rectTransform, new Vector2(0f, 1f), new Vector2(0.24f, 1f), new Vector2(24f, -68f), new Vector2(-8f, -104f));
-        deckText.color = new Color(0.14f, 0.2f, 0.17f);
+        deckText.color = UiThemeStyler.BrightText;
         speciesText = Label("Species", right.transform, 14, FontStyles.Bold, TextAlignmentOptions.TopRight);
         Place(speciesText.rectTransform, new Vector2(0.72f, 1f), new Vector2(1f, 1f), new Vector2(0f, -68f), new Vector2(-124f, -112f));
-        speciesText.color = new Color(0.14f, 0.2f, 0.17f);
+        speciesText.color = UiThemeStyler.BrightText;
         Button pauseButton = CreateUiButton("Pause", right.transform, new Color(0.82f, 0.84f, 0.74f), TogglePause);
         EnsurePauseButtonFrame(rightPanelRect, pauseButton.GetComponent<RectTransform>());
         water = null;
@@ -603,7 +603,7 @@ public class EcosystemController : MonoBehaviour
         TextMeshProUGUI handLabel = Label("HandLabel", right.transform, 20, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         Place(handLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(120f, 136f), new Vector2(-120f, 174f));
         handLabel.text = "Today's Hand";
-        handLabel.color = new Color(0.13f, 0.2f, 0.16f);
+        handLabel.color = UiThemeStyler.BrightTextWarm;
         CreateCardSlots(right.transform);
 
         tooltipPanel = Panel("Tooltip", canvas.transform, new Color(0.06f, 0.11f, 0.12f, 0.94f));
@@ -612,7 +612,7 @@ public class EcosystemController : MonoBehaviour
         tooltipText = Label("TooltipText", tooltipPanel.transform, 14, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         tooltipText.richText = true;
         Place(tooltipText.rectTransform, Vector2.zero, Vector2.one, new Vector2(18f, 10f), new Vector2(-18f, -10f));
-        tooltipText.color = new Color(0.12f, 0.17f, 0.2f);
+        tooltipText.color = UiThemeStyler.BrightText;
         tooltipText.textWrappingMode = TextWrappingModes.Normal;
         tooltipPanel.SetActive(false);
         menuPanel = null;
@@ -624,7 +624,7 @@ public class EcosystemController : MonoBehaviour
         UiThemeStyler.ApplyPanel(resultCard.GetComponent<Image>(), ThemePanelKind.Large, new Color(1f, 1f, 1f, 0.98f));
         resultText = Label("ResultText", resultCard.transform, 28, FontStyles.Bold, TextAlignmentOptions.Center);
         Place(resultText.rectTransform, new Vector2(0.06f, 0.3f), new Vector2(0.94f, 0.9f), Vector2.zero, Vector2.zero);
-        resultText.color = new Color(0.21f, 0.15f, 0.09f);
+        resultText.color = UiThemeStyler.BrightTextWarm;
         Button again = CreateUiButton("Play Again", resultCard.transform, new Color(0.42f, 0.75f, 0.94f), StartGame);
         Place(again.GetComponent<RectTransform>(), new Vector2(0.52f, 0.06f), new Vector2(0.9f, 0.22f), Vector2.zero, Vector2.zero);
         Button settings = CreateUiButton("Change Settings", resultCard.transform, new Color(0.82f, 0.84f, 0.74f), GoToSetup);
@@ -640,11 +640,11 @@ public class EcosystemController : MonoBehaviour
         TextMeshProUGUI pauseTitle = Label("PauseTitle", pauseCard.transform, 42, FontStyles.Bold, TextAlignmentOptions.Center);
         Place(pauseTitle.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -52f), new Vector2(0f, -8f));
         pauseTitle.text = "Game Paused";
-        pauseTitle.color = new Color(0.21f, 0.15f, 0.09f);
+        pauseTitle.color = Color.black;
 
         pauseStatusText = Label("PauseStatus", pauseCard.transform, 17, FontStyles.Normal, TextAlignmentOptions.Center);
         Place(pauseStatusText.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -100f), new Vector2(0f, -58f));
-        pauseStatusText.color = new Color(0.28f, 0.38f, 0.44f);
+        pauseStatusText.color = Color.black;
 
         Button resumeButton = CreateUiButton("Resume Game", pauseCard.transform, new Color(0.34f, 0.78f, 0.5f), TogglePause);
         Place(resumeButton.GetComponent<RectTransform>(), new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -176f), new Vector2(0f, -116f));
@@ -655,7 +655,7 @@ public class EcosystemController : MonoBehaviour
         TextMeshProUGUI restartWarning = Label("RestartWarning", pauseCard.transform, 13, FontStyles.Normal, TextAlignmentOptions.Center);
         Place(restartWarning.rectTransform, new Vector2(0.1f, 1f), new Vector2(0.9f, 1f), new Vector2(0f, -278f), new Vector2(0f, -248f));
         restartWarning.text = "Restarting will lose all current progress.";
-        restartWarning.color = new Color(0.55f, 0.3f, 0.18f);
+        restartWarning.color = Color.black;
 
         Button quitButton = CreateUiButton("Quit to Desktop", pauseCard.transform, new Color(0.68f, 0.68f, 0.7f), QuitGame);
         Place(quitButton.GetComponent<RectTransform>(), new Vector2(0.2f, 0f), new Vector2(0.8f, 0f), new Vector2(0f, 32f), new Vector2(0f, 80f));
@@ -842,7 +842,7 @@ public class EcosystemController : MonoBehaviour
         {
             TextMeshProUGUI label = Label("HandLabel", parent, 20, FontStyles.Bold, TextAlignmentOptions.TopLeft);
             label.text = "Today's Hand";
-            label.color = new Color(0.13f, 0.2f, 0.16f);
+            label.color = UiThemeStyler.BrightTextWarm;
             Place(label.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(120f, 136f), new Vector2(-120f, 174f));
         }
 
@@ -2020,7 +2020,7 @@ public class EcosystemController : MonoBehaviour
         string fishHex = fishCount < settings.StableFishMin ? "#FF8888" : "#88FFCC";
         string snailHex = snailCount == 0 ? "#AAAAAA" : (algaeCount <= settings.SnailStarveThreshold ? "#FF8844" : "#88FFCC");
         string lightHex = lightLevel >= 70f ? "#FFDD66" : lightLevel < 30f ? "#9999FF" : "#88FFCC";
-        const string helperHex = "#5B635F";
+        const string helperHex = "#CDEFF6";
 
         if (statsText != null) statsText.text =
             jarName + "  ·  " + difficulty + "\n\n"
@@ -2039,7 +2039,7 @@ public class EcosystemController : MonoBehaviour
             + "  <size=11><color=" + helperHex + ">(warn " + settings.NitrateWarning.ToString("0") + " / bad " + settings.NitrateCollapse.ToString("0") + ")</color></size>\n"
             + "<color=" + stabilityHex + ">Stability  " + stability.ToString("0") + "</color>"
             + "  <size=11><color=" + helperHex + ">(good above 65)</color></size>\n"
-            + "<color=#233433>Points  " + (currentDieRoll > 0 ? currentDieRoll.ToString() : "-") + "</color>";
+            + "<color=#FFF1A8>Points  " + (currentDieRoll > 0 ? currentDieRoll.ToString() : "-") + "</color>";
 
         // Update fill bars
         if (stableProgressFill != null)
@@ -2057,7 +2057,7 @@ public class EcosystemController : MonoBehaviour
         if (warningText != null)
         {
             warningText.text = string.IsNullOrEmpty(latestWarnings) ? "Warnings\nStable for now." : "Warnings\n" + latestWarnings;
-            warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.19f, 0.42f, 0.29f) : new Color(0.53f, 0.31f, 0.1f);
+            warningText.color = string.IsNullOrEmpty(latestWarnings) ? new Color(0.76f, 1f, 0.84f) : UiThemeStyler.BrightTextDanger;
         }
         if (eventText != null) eventText.text = "Roll bank: +" + currentRollGain + " today  ·  Common: 1  ·  Uncommon: " + settings.UncommonUnlockRoll + "  ·  Rare: " + settings.RareUnlockRoll;
         if (selectedText != null) selectedText.text = BuildSelectedText();
@@ -2116,7 +2116,11 @@ public class EcosystemController : MonoBehaviour
             else
             {
                 TMP_Text label = cardButtons[i].GetComponentInChildren<TMP_Text>();
-                if (label != null) label.text = !unlocked ? "Locked" : isSelected ? "Selected" : (selected.Count >= 1 ? "Pick 1 Only" : "Select");
+                if (label != null)
+                {
+                    label.text = !unlocked ? "Locked" : isSelected ? "Selected" : (selected.Count >= 1 ? "Pick 1 Only" : "Select");
+                    label.color = unlocked ? UiThemeStyler.BrightText : UiThemeStyler.BrightTextSoft;
+                }
                 cardButtons[i].interactable = canInteract;
             }
         }
@@ -3629,7 +3633,7 @@ public class EcosystemController : MonoBehaviour
             }
             faceText.alignment = TextAlignmentOptions.Center;
             faceText.fontSize = 4.5f;
-            faceText.color = new Color(0.09f, 0.09f, 0.1f, 1f);
+            faceText.color = UiThemeStyler.BrightText;
             faceText.textWrappingMode = TextWrappingModes.NoWrap;
         }
 
@@ -4021,8 +4025,8 @@ public class EcosystemController : MonoBehaviour
     }
 
     private static GameObject Panel(string name, Transform parent, Color color) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); Image img = go.AddComponent<Image>(); img.color = color; return go; }
-    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = CreateButtonObject(text, parent, color); Button b = go.GetComponent<Button>() ?? go.AddComponent<Button>(); Image image = go.GetComponent<Image>(); if (image != null) b.targetGraphic = image; ColorBlock cb = b.colors; cb.highlightedColor = Color.white; cb.pressedColor = Color.white; b.colors = cb; b.onClick.RemoveAllListeners(); b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = new Color(0.11f, 0.15f, 0.19f); Stretch(t.rectTransform); UiThemeStyler.ApplyButton(b, GetButtonKind(text), t); return b; }
-    private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions alignment) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); TextMeshProUGUI t = go.AddComponent<TextMeshProUGUI>(); t.font = TmpFontUtility.GetFont(); t.fontSize = size; t.fontStyle = style; t.alignment = alignment; t.textWrappingMode = TextWrappingModes.Normal; t.overflowMode = TextOverflowModes.Overflow; return t; }
+    private static Button CreateUiButton(string text, Transform parent, Color color, UnityEngine.Events.UnityAction onClick) { GameObject go = CreateButtonObject(text, parent, color); Button b = go.GetComponent<Button>() ?? go.AddComponent<Button>(); Image image = go.GetComponent<Image>(); if (image != null) b.targetGraphic = image; ColorBlock cb = b.colors; cb.highlightedColor = Color.white; cb.pressedColor = Color.white; b.colors = cb; b.onClick.RemoveAllListeners(); b.onClick.AddListener(onClick); TextMeshProUGUI t = Label(text + "Text", go.transform, 18, FontStyles.Bold, TextAlignmentOptions.Center); t.text = text; t.color = Color.black; Stretch(t.rectTransform); UiThemeStyler.ApplyButton(b, GetButtonKind(text), t); t.color = Color.black; return b; }
+    private static TextMeshProUGUI Label(string name, Transform parent, int size, FontStyles style, TextAlignmentOptions alignment) { GameObject go = new GameObject(name); RectTransform rt = go.AddComponent<RectTransform>(); rt.SetParent(parent, false); TextMeshProUGUI t = go.AddComponent<TextMeshProUGUI>(); t.font = TmpFontUtility.GetFont(); t.fontSize = size; t.fontStyle = style; t.alignment = alignment; t.textWrappingMode = TextWrappingModes.Normal; t.overflowMode = TextOverflowModes.Overflow; t.color = UiThemeStyler.BrightText; return t; }
     private static void Stretch(RectTransform rt) { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
     private static void Place(RectTransform rt, Vector2 min, Vector2 max, Vector2 offMin, Vector2 offMax) { rt.anchorMin = min; rt.anchorMax = max; rt.offsetMin = offMin; rt.offsetMax = offMax; }
     private static GameObject CreateButtonObject(string text, Transform parent, Color color)
@@ -4039,6 +4043,22 @@ public class EcosystemController : MonoBehaviour
             "Re-roll Die" => ThemeButtonKind.Secondary,
             "Play Again" => ThemeButtonKind.Start,
             _ => ThemeButtonKind.Primary
+        };
+    }
+
+    private static Color GetGameplayButtonTextColor(string text)
+    {
+        return text switch
+        {
+            "Restart Run" => UiThemeStyler.BrightTextDanger,
+            "Quit" => UiThemeStyler.BrightTextDanger,
+            "Quit to Desktop" => UiThemeStyler.BrightTextDanger,
+            "Pause" => UiThemeStyler.BrightTextSoft,
+            "Re-roll Die" => UiThemeStyler.BrightTextSoft,
+            "Change Settings" => UiThemeStyler.BrightTextSoft,
+            "Play Again" => UiThemeStyler.BrightText,
+            "Resume Game" => UiThemeStyler.BrightText,
+            _ => UiThemeStyler.BrightTextWarm
         };
     }
 
@@ -4059,6 +4079,22 @@ public class EcosystemController : MonoBehaviour
         ApplyButtonTheme(root, "Quit to DesktopButton", ThemeButtonKind.Danger);
         ApplyButtonTheme(root, "Play AgainButton", ThemeButtonKind.Start);
         ApplyButtonTheme(root, "Change SettingsButton", ThemeButtonKind.Secondary);
+        ApplyTextTheme(root, "Title", UiThemeStyler.BrightText);
+        ApplyTextTheme(root, "Desc", UiThemeStyler.BrightTextSoft);
+        ApplyTextTheme(root, "Stats", UiThemeStyler.BrightText);
+        ApplyTextTheme(root, "Warnings", UiThemeStyler.BrightTextDanger);
+        ApplyTextTheme(root, "Event", UiThemeStyler.BrightTextSoft);
+        ApplyTextTheme(root, "Selected", UiThemeStyler.BrightTextWarm);
+        ApplyTextTheme(root, "Report", Color.black);
+        ApplyTextTheme(root, "Banner", UiThemeStyler.BrightText);
+        ApplyTextTheme(root, "Deck", UiThemeStyler.BrightText);
+        ApplyTextTheme(root, "Species", UiThemeStyler.BrightText);
+        ApplyTextTheme(root, "HandLabel", UiThemeStyler.BrightTextWarm);
+        ApplyTextTheme(root, "TooltipText", UiThemeStyler.BrightText);
+        ApplyTextTheme(root, "ResultText", UiThemeStyler.BrightTextWarm);
+        ApplyTextTheme(root, "PauseTitle", Color.black);
+        ApplyTextTheme(root, "PauseStatus", Color.black);
+        ApplyTextTheme(root, "RestartWarning", Color.black);
     }
 
     private static void ApplyPanelTheme(Transform root, string name, ThemePanelKind kind, Color tint)
@@ -4086,5 +4122,20 @@ public class EcosystemController : MonoBehaviour
 
         TMP_Text label = match.GetComponentInChildren<TMP_Text>(true);
         UiThemeStyler.ApplyButton(button, kind, label);
+        if (label != null)
+        {
+            label.color = Color.black;
+        }
+    }
+
+    private static void ApplyTextTheme(Transform root, string name, Color color)
+    {
+        TMP_Text text = FindText(root, name);
+        if (text == null)
+        {
+            return;
+        }
+
+        text.color = color;
     }
 }
